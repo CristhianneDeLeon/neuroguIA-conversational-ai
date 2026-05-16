@@ -4,6 +4,9 @@
 
 Su propósito es ofrecer un acompañamiento **cálido, claro y adaptativo**, sin sustituir atención clínica, combinando múltiples enfoques de inteligencia artificial bajo un modelo **seguro, controlado y supervisado**.
 
+### 👩‍💻 Autor:
+**Cristhianne De León Vargas**
+
 ---
 
 ## ✨ ¿Qué hace neuroguIA?
@@ -118,6 +121,3 @@ neuroguIA/
 ├── docs/
 └── validation_outputs/
 ---
-
-### 👩‍💻 Autor:
-**Cristhianne De León Vargas**
