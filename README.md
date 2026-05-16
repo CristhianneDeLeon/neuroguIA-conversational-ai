@@ -1,118 +1,160 @@
 # 🧠 neuroguIA
 
-**neuroguIA** es un sistema conversacional híbrido orientado al **apoyo socioemocional y funcional en contextos de neurodivergencia**, diseñado para acompañar a personas usuarias, cuidadores y docentes.
+### Hybrid Conversational AI for Socioemotional Support in Neurodivergent Contexts
 
-Su propósito es ofrecer un acompañamiento **cálido, claro y adaptativo**, sin sustituir atención clínica, combinando múltiples enfoques de inteligencia artificial bajo un modelo **seguro, controlado y supervisado**.
-
-### 👩‍💻 Autor:
-**Cristhianne De León Vargas**
-
----
-
-## ✨ ¿Qué hace neuroguIA?
-
-neuroguIA no solo responde:  
-**interpreta, organiza, acompaña y personaliza la conversación.**
-
-Entre sus capacidades principales:
-
-### 🧠 Interpretación
-- clasificación de intención conversacional
-- identificación de categorías funcionales
-- detección de estados como:
-  - meltdown
-  - shutdown
-  - burnout
-  - disfunción ejecutiva
-  - sobrecarga sensorial
-
-### ⚙️ Decisión
-- selección de estrategias adaptativas
-- generación de microacciones y rutinas
-- sistema de confianza basado en múltiples señales
-
-### 💬 Respuesta
-- generación de respuestas cálidas y estructuradas
-- fallback seguro a generación local
-- integración opcional con LLM
-
-### 🔁 Aprendizaje supervisado
-- memoria contextual por usuario o sesión
-- curación de conversaciones valiosas
-- base para mejora iterativa supervisada
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Status](https://img.shields.io/badge/Status-Research%20Prototype-purple)
+![AI](https://img.shields.io/badge/AI-Hybrid-orange)
+![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-green)
 
 ---
 
-## 🏗️ Arquitectura de Inteligencia Artificial
+## 📖 Overview
 
-neuroguIA implementa una arquitectura híbrida de múltiples capas:
+**neuroguIA** is a hybrid conversational AI system focused on providing **socioemotional and functional support in neurodivergent contexts**, designed to accompany users, caregivers, families, and educators through adaptive, contextualized, and supervised conversational assistance.
 
-### 1. 🔵 Reglas y lógica interna (núcleo)
-Controlan la clasificación, decisión y seguridad del sistema.
-
----
-
-### 2. 🟢 Aprendizaje automático clásico
-Baseline interpretable con:
-- `TF-IDF`
-- `Logistic Regression`
-
-👉 Se usa como señal auxiliar, no como decisión principal.
+The system combines multiple artificial intelligence approaches under a **safe, interpretable, and controlled architecture**, without replacing clinical or therapeutic attention.
 
 ---
 
-### 3. 🟣 Similitud semántica (embeddings)
-Implementada con:
+## ✨ Core Capabilities
+
+neuroguIA does not simply generate responses.  
+It is designed to:
+
+- interpret conversational intention
+- identify functional and emotional states
+- organize adaptive conversational flows
+- provide contextualized support
+- generate structured micro-actions and routines
+- maintain contextual memory across interactions
+- supervise conversational quality and safety
+
+---
+
+## 🧠 Conversational Interpretation
+
+The system includes mechanisms for:
+
+- conversational intent classification
+- functional category detection
+- contextual semantic interpretation
+- emotional signal processing
+- adaptive routing and decision support
+
+Supported states include:
+
+- meltdown
+- shutdown
+- burnout
+- executive dysfunction
+- sensory overload
+- emotional saturation
+
+---
+
+## 🏗️ Hybrid AI Architecture
+
+neuroguIA implements a multi-layer hybrid architecture composed of:
+
+### 🔵 Rule-Based Core System
+
+Internal logic responsible for:
+
+- routing
+- validation
+- adaptive decision-making
+- safety mechanisms
+- fallback strategies
+
+---
+
+### 🟢 Classical Machine Learning
+
+Interpretable baseline models using:
+
+- TF-IDF
+- Logistic Regression
+
+These models are used as supportive signals rather than primary decision-makers.
+
+---
+
+### 🟣 Semantic Similarity & Embeddings
+
+Implemented with:
+
 - `sentence-transformers`
-- modelo: `all-MiniLM-L6-v2`
+- model: `all-MiniLM-L6-v2`
 
-👉 Permite comparar significado, no solo palabras.
+This layer enables semantic understanding beyond keyword matching.
 
 ---
 
-### 4. 🟡 Generación con LLM (IA generativa)
-Integración con OpenAI mediante:
+### 🟡 Controlled Generative AI
+
+Optional integration with OpenAI through:
+
 - `core/llm_gateway.py`
 
-Características:
-- generación controlada
-- fallback automático
-- no delega decisiones críticas al LLM
+Features include:
+
+- supervised response generation
+- controlled prompting
+- automatic fallback logic
+- non-delegation of critical decisions to LLMs
 
 ---
 
-### 5. 🧠 Memoria contextual y curación
-- memoria supervisada (no invasiva)
-- registro de conversaciones valiosas
-- sin aprendizaje automático en vivo
+### 🧠 Contextual Memory System
+
+The system incorporates:
+
+- contextual session memory
+- supervised memory persistence
+- conversational curation
+- reusable adaptive responses
+- structured interaction history
 
 ---
 
-## 🧩 Funcionalidades principales
+## ⚙️ Main Features
 
-- clasificación de intención y categoría
-- detección de estado funcional
-- decisiones adaptativas
-- memoria contextual por sesión
-- curación supervisada
-- reutilización de respuestas útiles
-- soporte multi-backend (SQLite, PostgreSQL, Supabase)
-- interfaz con Streamlit
+- intent classification
+- category detection
+- adaptive conversational routing
+- emotional and functional state detection
+- contextual memory
+- supervised conversation curation
+- reusable response memory
+- multi-backend database support
+- Streamlit interface
+- hybrid NLP processing pipeline
 
 ---
 
-## 📁 Estructura del proyecto
+## 🗄️ Database & Persistence
+
+neuroguIA supports multiple persistence backends:
+
+- SQLite
+- PostgreSQL
+- Supabase
+
+The project includes structured schemas and modular persistence logic for conversational storage and contextual memory management.
+
+---
+
+## 📁 Project Structure
 
 ```text
 neuroguIA/
 ├── app.py
-├── predeploy_check.py
 ├── validate_experiment.py
 ├── requirements.txt
 ├── schema_supabase.sql
 ├── README.md
 ├── .gitignore
-├── .env.example
 ├── assets/
 ├── core/
 ├── memory/
@@ -120,4 +162,52 @@ neuroguIA/
 ├── scripts/
 ├── docs/
 └── validation_outputs/
+```
+
 ---
+
+## 🧪 Project Status
+
+Research prototype currently under active development and experimental validation.
+
+The system continues evolving through iterative testing, conversational analysis, contextual evaluation, and supervised refinement.
+
+---
+
+## ⚖️ Ethical Considerations
+
+neuroguIA does not replace medical, psychological, psychiatric, or therapeutic care.
+
+The system was designed exclusively as a socioemotional accompaniment and functional support tool within educational and family environments related to neurodivergence.
+
+All datasets and conversational records intended for academic or research purposes are anonymized prior to analysis and publication.
+
+---
+
+## 🔬 Research Areas
+
+- Artificial Intelligence
+- Conversational AI
+- Natural Language Processing (NLP)
+- Hybrid AI Systems
+- Human-Centered AI
+- Neurodivergence
+- Socioemotional Support Technologies
+- Adaptive Conversational Systems
+
+---
+
+## 👩‍💻 Author
+
+**Cristhianne De León**  
+M.Sc. Student in Artificial Intelligence
+
+ORCID: https://orcid.org/0009-0007-4777-1741
+
+---
+
+## 📄 License
+
+This project is distributed under the **CC BY-NC 4.0 License**.
+
+Academic and research use is permitted with proper attribution. Commercial use is not allowed without explicit authorization.
