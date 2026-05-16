@@ -38,6 +38,10 @@ It is designed to:
 
 ## 🧠 Conversational Interpretation
 
+<p align="center">
+  <img src="docs/Pipeline NLP.png" width="100%">
+</p>
+
 The system includes mechanisms for:
 
 - conversational intent classification
@@ -58,6 +62,10 @@ Supported states include:
 ---
 
 ## 🏗️ Hybrid AI Architecture
+
+<p align="center">
+  <img src="docs/Arquitectura multicapa.png" width="100%">
+</p>
 
 neuroguIA implements a multi-layer hybrid architecture composed of:
 
@@ -112,6 +120,10 @@ Features include:
 
 ### 🧠 Contextual Memory System
 
+<p align="center">
+  <img src="docs/Memoria contextual.png" width="100%">
+</p>
+
 The system incorporates:
 
 - contextual session memory
@@ -123,6 +135,10 @@ The system incorporates:
 ---
 
 ## ⚙️ Main Features
+
+<p align="center">
+  <img src="docs/Diagrama general de flujo del sistema.png" width="100%">
+</p>
 
 - intent classification
 - category detection
