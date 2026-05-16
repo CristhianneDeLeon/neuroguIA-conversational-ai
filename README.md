@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner_neuroguIA.png" alt="neuroguIA Banner" width="100%">
+</p>
+
 # 🧠 neuroguIA
 
 ### Hybrid Conversational AI for Socioemotional Support in Neurodivergent Contexts
