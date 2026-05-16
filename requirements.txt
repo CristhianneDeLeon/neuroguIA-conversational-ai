@@ -1,0 +1,6 @@
+streamlit
+psycopg[binary]
+supabase
+scikit-learn
+sentence-transformers
+openai
