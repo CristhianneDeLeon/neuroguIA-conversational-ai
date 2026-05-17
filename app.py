@@ -1518,11 +1518,10 @@ def render_quick_help_sidebar() -> None:
 
     st.markdown('</div></div>', unsafe_allow_html=True)
 
-
 def render_response_debug_metadata() -> None:
     result = st.session_state.last_result if isinstance(st.session_state.last_result, dict) else {}
     show_debug = st.checkbox(
-        "Mostrar diagnóstico",
+#        "Mostrar diagnóstico",
         key="show_response_debug",
     )
     if not show_debug or not result:
