@@ -1,4 +1,6 @@
 streamlit
+sqlalchemy
+psycopg
 psycopg[binary]
 supabase
 scikit-learn
