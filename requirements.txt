@@ -3,4 +3,5 @@ psycopg[binary]
 supabase
 scikit-learn
 sentence-transformers
+torchvision
 openai
