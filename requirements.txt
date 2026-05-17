@@ -2,6 +2,8 @@ streamlit
 sqlalchemy
 psycopg
 psycopg[binary]
+psycopg-binary
+psycopg2-binary
 supabase
 scikit-learn
 transformers
