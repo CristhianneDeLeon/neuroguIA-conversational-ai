@@ -2,6 +2,8 @@ streamlit
 psycopg[binary]
 supabase
 scikit-learn
+transformers
 sentence-transformers
+torch
 torchvision
 openai
