@@ -6,9 +6,11 @@ import html
 import os
 import sys
 import uuid
+import streamlit as st
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from sqlalchemy import create_engine, text
 
 import streamlit as st
 
@@ -38,6 +40,53 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+@st.cache_resource
+def get_message_db_engine():
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        return None
+    return create_engine(database_url, pool_pre_ping=True)
+
+
+def save_message_to_db(
+    session_id: str,
+    user_role: str,
+    message: str,
+    detected_category=None,
+    emotional_state=None,
+    profile_id=None,
+    family_id=None,
+):
+    engine = get_message_db_engine()
+    if engine is None:
+        st.session_state["db_message_log_error"] = "DATABASE_URL no está configurada."
+        return
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    insert into public.ng_messages
+                    (session_id, user_role, message, detected_category, emotional_state, profile_id, family_id)
+                    values
+                    (:session_id, :user_role, :message, :detected_category, :emotional_state, :profile_id, :family_id)
+                """),
+                {
+                    "session_id": session_id,
+                    "user_role": user_role,
+                    "message": message,
+                    "detected_category": detected_category,
+                    "emotional_state": emotional_state,
+                    "profile_id": profile_id,
+                    "family_id": family_id,
+                },
+            )
+        st.session_state.pop("db_message_log_error", None)
+    except Exception as exc:
+        st.session_state["db_message_log_error"] = str(exc)
+
 
 # ---------------------------------------------------------
 # ESTILOS UI
@@ -686,6 +735,8 @@ STREAMLIT_SECRET_ENV_KEYS = (
     "OPENAI_MODEL",
     "OPENAI_TIMEOUT_SECONDS",
     "DEBUG_MODE",
+    "DATABASE_URL",
+    "DB_BACKEND",
 )
 
 
