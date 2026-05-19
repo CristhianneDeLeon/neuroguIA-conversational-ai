@@ -6,11 +6,9 @@ import html
 import os
 import sys
 import uuid
-import streamlit as st
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from sqlalchemy import create_engine, text
 
 import streamlit as st
 
@@ -40,53 +38,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-
-@st.cache_resource
-def get_message_db_engine():
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        return None
-    return create_engine(database_url, pool_pre_ping=True)
-
-
-def save_message_to_db(
-    session_id: str,
-    user_role: str,
-    message: str,
-    detected_category=None,
-    emotional_state=None,
-    profile_id=None,
-    family_id=None,
-):
-    engine = get_message_db_engine()
-    if engine is None:
-        st.session_state["db_message_log_error"] = "DATABASE_URL no está configurada."
-        return
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text("""
-                    insert into public.ng_messages
-                    (session_id, user_role, message, detected_category, emotional_state, profile_id, family_id)
-                    values
-                    (:session_id, :user_role, :message, :detected_category, :emotional_state, :profile_id, :family_id)
-                """),
-                {
-                    "session_id": session_id,
-                    "user_role": user_role,
-                    "message": message,
-                    "detected_category": detected_category,
-                    "emotional_state": emotional_state,
-                    "profile_id": profile_id,
-                    "family_id": family_id,
-                },
-            )
-        st.session_state.pop("db_message_log_error", None)
-    except Exception as exc:
-        st.session_state["db_message_log_error"] = str(exc)
-
 
 # ---------------------------------------------------------
 # ESTILOS UI
@@ -735,8 +686,6 @@ STREAMLIT_SECRET_ENV_KEYS = (
     "OPENAI_MODEL",
     "OPENAI_TIMEOUT_SECONDS",
     "DEBUG_MODE",
-    "DATABASE_URL",
-    "DB_BACKEND",
 )
 
 
@@ -1714,40 +1663,88 @@ def render_context_selector(
 # CRUD
 # ---------------------------------------------------------
 def create_unit_ui(db_path: str, embedded: bool = False) -> None:
-    container = st.container() if embedded else st.expander("➕ Crear familia o caso", expanded=False)
+    """Render a clearer family/case capture form.
+
+    The goal is to reduce cognitive load: only the essential context is shown
+    first, and the extra details remain optional. Internally we keep the same
+    database fields used by ng_families so the rest of the app does not break.
+    """
+    container = st.container() if embedded else st.expander("➕ Crear caso o familia", expanded=False)
 
     with container:
         if embedded:
             st.markdown('<div class="ng-section-block"><div class="ng-card">', unsafe_allow_html=True)
             st.markdown('<p class="ng-section-title">Crear un caso o familia</p>', unsafe_allow_html=True)
             st.markdown(
-                '<p class="ng-soft-note">Úsalo solo si quieres guardar contexto para que el acompañamiento tenga más continuidad.</p>',
+                '<p class="ng-soft-note">Guarda solo el contexto necesario para que neuroguIA pueda acompañar con más continuidad. Puedes completar los detalles poco a poco.</p>',
                 unsafe_allow_html=True,
             )
 
         with st.form("create_unit_form", clear_on_submit=True):
-            unit_type = st.selectbox("Tipo de registro", ["family", "individual"], index=0)
-            caregiver_alias = st.text_input("Nombre o alias principal")
-            context_notes = st.text_area("Notas de contexto")
-            support_network = st.text_input("Red de apoyo")
-            environmental_factors = st.text_input("Factores del entorno")
-            global_history = st.text_area("Historial general")
-            submitted = st.form_submit_button("Crear")
+            st.markdown("**1. Datos básicos del caso**")
+            unit_type_label = st.radio(
+                "¿Qué tipo de contexto quieres guardar?",
+                ["Familia o red de cuidado", "Caso individual"],
+                index=0,
+                horizontal=False,
+                help="Usa 'Familia o red de cuidado' cuando varias personas participan en el acompañamiento. Usa 'Caso individual' cuando la persona usuaria se acompaña a sí misma.",
+            )
+            unit_type = "family" if unit_type_label == "Familia o red de cuidado" else "individual"
+
+            caregiver_alias = st.text_input(
+                "Nombre del caso o familia",
+                placeholder="Ejemplo: Familia Daniel, Caso Ana, Grupo de apoyo escolar",
+                help="Este nombre aparecerá en el selector de contexto. No uses datos sensibles si prefieres mantener anonimato.",
+            )
+
+            st.markdown("**2. Situación principal**")
+            context_notes = st.text_area(
+                "¿Qué situación quieres que neuroguIA tenga presente?",
+                placeholder="Ejemplo: Hay dificultades con sueño, saturación sensorial y organización escolar. La familia busca estrategias breves y respetuosas.",
+                height=110,
+                help="Describe el contexto general en palabras simples. No tiene que ser perfecto; basta con lo que ayude a entender el caso.",
+            )
+
+            with st.expander("Detalles opcionales del contexto", expanded=False):
+                support_network = st.text_area(
+                    "Red de apoyo",
+                    placeholder="Ejemplo: mamá, papá, abuela, docente de apoyo, terapeuta externo, amistades cercanas.",
+                    height=82,
+                    help="Personas o instituciones que pueden apoyar cuando hay sobrecarga, crisis o necesidad de seguimiento.",
+                )
+                environmental_factors = st.text_area(
+                    "Factores del entorno",
+                    placeholder="Ejemplo: ruido escolar, cambios de rutina, pantallas por la noche, transporte, discusiones familiares.",
+                    height=82,
+                    help="Elementos del ambiente que pueden influir en el bienestar o conducta.",
+                )
+                global_history = st.text_area(
+                    "Notas importantes de historia o seguimiento",
+                    placeholder="Ejemplo: suele mejorar con anticipación visual; empeora cuando se le presiona; se busca evitar lenguaje clínico o juicios.",
+                    height=92,
+                    help="Información que conviene recordar en futuras conversaciones.",
+                )
+
+            submitted = st.form_submit_button("Guardar caso o familia")
 
             if submitted:
+                if not caregiver_alias.strip():
+                    st.warning("Agrega un nombre o alias para identificar este caso.")
+                    return
+
                 pm = get_profile_manager(db_path)
                 try:
                     family_id = pm.create_unit(
                         unit_type=unit_type,
-                        caregiver_alias=caregiver_alias or None,
-                        context_notes=context_notes or None,
-                        support_network=support_network or None,
-                        environmental_factors=environmental_factors or None,
-                        global_history=global_history or None,
+                        caregiver_alias=caregiver_alias.strip() or None,
+                        context_notes=context_notes.strip() or None,
+                        support_network=support_network.strip() or None,
+                        environmental_factors=environmental_factors.strip() or None,
+                        global_history=global_history.strip() or None,
                     )
                     st.session_state.selected_family_id = family_id
                     st.session_state.selected_profile_id = None
-                    st.success(f"Registro creado correctamente. ID: {family_id}")
+                    st.success("Caso guardado correctamente. Ahora puedes crear o seleccionar un perfil individual.")
                     st.rerun()
                 finally:
                     safe_close(pm)
@@ -1757,21 +1754,26 @@ def create_unit_ui(db_path: str, embedded: bool = False) -> None:
 
 
 def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embedded: bool = False) -> None:
-    container = st.container() if embedded else st.expander("👤 Crear perfil", expanded=False)
+    """Render a clearer individual profile capture form.
+
+    Essential fields are grouped first. Technical fields are kept as optional
+    details so the UI is easier to understand for caregivers and families.
+    """
+    container = st.container() if embedded else st.expander("👤 Crear perfil individual", expanded=False)
 
     with container:
         if embedded:
             st.markdown('<div class="ng-section-block"><div class="ng-card">', unsafe_allow_html=True)
-            st.markdown('<p class="ng-section-title">Crear un perfil</p>', unsafe_allow_html=True)
+            st.markdown('<p class="ng-section-title">Crear un perfil individual</p>', unsafe_allow_html=True)
             st.markdown(
-                '<p class="ng-soft-note">Puedes guardar una persona concreta para que las respuestas se adapten mejor a su realidad.</p>',
+                '<p class="ng-soft-note">Crea un perfil para una persona concreta. Así neuroguIA puede responder con mayor cuidado según sus detonantes, señales y apoyos útiles.</p>',
                 unsafe_allow_html=True,
             )
 
         if not available_units:
             if embedded:
                 st.markdown(
-                    '<p class="ng-soft-note">Primero guarda un caso o familia para poder crear un perfil.</p>',
+                    '<p class="ng-soft-note">Primero guarda un caso o familia para poder crear un perfil individual.</p>',
                     unsafe_allow_html=True,
                 )
                 st.markdown('</div></div>', unsafe_allow_html=True)
@@ -1780,62 +1782,164 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
             return
 
         unit_options = {format_unit_label(u): u["family_id"] for u in available_units}
+        unit_labels = list(unit_options.keys())
+        default_unit_index = 0
+        if st.session_state.get("selected_family_id"):
+            for idx, label in enumerate(unit_labels):
+                if unit_options[label] == st.session_state.selected_family_id:
+                    default_unit_index = idx
+                    break
 
         with st.form("create_profile_form", clear_on_submit=True):
-            unit_label = st.selectbox("Familia o caso", list(unit_options.keys()))
-            alias = st.text_input("Nombre o alias")
-            age = st.number_input("Edad", min_value=0, max_value=120, value=10, step=1)
-            role = st.selectbox(
-                "Rol",
-                ["hijo", "hija", "madre", "padre", "cuidador", "cuidadora", "adolescente", "usuario_individual", "otro"],
+            st.markdown("**1. ¿De quién es este perfil?**")
+            unit_label = st.selectbox(
+                "Caso o familia donde se guardará",
+                unit_labels,
+                index=default_unit_index,
+                help="El perfil quedará conectado con este caso o familia.",
             )
-            conditions = st.text_input("Condiciones o características (separadas por comas)")
-            strengths = st.text_input("Fortalezas (separadas por comas)")
-            triggers = st.text_input("Disparadores (separados por comas)")
-            early_signs = st.text_input("Señales tempranas (separadas por comas)")
-            helpful_strategies = st.text_input("Estrategias que ayudan (separadas por comas)")
-            harmful_strategies = st.text_input("Estrategias que empeoran (separadas por comas)")
-            sensory_needs = st.text_input("Necesidades sensoriales (separadas por comas)")
-            emotional_needs = st.text_input("Necesidades emocionales (separadas por comas)")
-            autonomy_level = st.text_input("Nivel de autonomía")
-            sleep_profile = st.text_input("Perfil de sueño")
-            school_profile = st.text_input("Perfil escolar")
-            executive_profile = st.text_input("Perfil ejecutivo")
-            evolution_notes = st.text_area("Notas evolutivas")
-            submitted = st.form_submit_button("Crear perfil")
+            alias = st.text_input(
+                "Nombre o alias de la persona",
+                placeholder="Ejemplo: Daniel, Dani, Persona A",
+                help="Puedes usar un alias para proteger la identidad.",
+            )
+            col_age, col_role = st.columns([0.9, 1.25])
+            with col_age:
+                age_text = st.text_input(
+                    "Edad",
+                    placeholder="Ej. 15",
+                    help="Déjalo vacío si no quieres registrarla.",
+                )
+            with col_role:
+                role = st.selectbox(
+                    "Rol o relación",
+                    [
+                        "hijo",
+                        "hija",
+                        "adolescente",
+                        "adulto",
+                        "madre",
+                        "padre",
+                        "cuidador",
+                        "cuidadora",
+                        "estudiante",
+                        "usuario_individual",
+                        "otro",
+                    ],
+                    help="Ayuda a adaptar el lenguaje de las respuestas.",
+                )
+
+            st.markdown("**2. Información esencial para acompañar mejor**")
+            conditions = st.text_area(
+                "Características principales",
+                placeholder="Ejemplo: autismo, TDAH, alta sensibilidad sensorial, ansiedad escolar, dificultad para cambios de rutina.",
+                height=82,
+                help="Escribe palabras o frases cortas. No necesitas usar términos clínicos si no los tienes claros.",
+            )
+            triggers = st.text_area(
+                "Lo que suele detonar malestar o saturación",
+                placeholder="Ejemplo: ruido, luces fuertes, presión por terminar rápido, cambios inesperados, muchas instrucciones juntas.",
+                height=82,
+            )
+            early_signs = st.text_area(
+                "Señales tempranas de que algo no va bien",
+                placeholder="Ejemplo: se tapa los oídos, se queda callado, camina de un lado a otro, llora, se irrita, se bloquea.",
+                height=82,
+            )
+            helpful_strategies = st.text_area(
+                "Lo que normalmente ayuda",
+                placeholder="Ejemplo: hablar bajo, dar tiempo, bajar estímulos, usar una lista corta, respirar, salir a un lugar tranquilo.",
+                height=82,
+            )
+            harmful_strategies = st.text_area(
+                "Lo que NO ayuda o puede empeorar",
+                placeholder="Ejemplo: regaños, insistir demasiado, tocar sin avisar, hacer muchas preguntas, minimizar lo que siente.",
+                height=82,
+            )
+
+            with st.expander("Detalles avanzados, si los conoces", expanded=False):
+                strengths = st.text_area(
+                    "Fortalezas e intereses",
+                    placeholder="Ejemplo: memoria visual, gusto por animales, dibujo, videojuegos, música, buena observación.",
+                    height=76,
+                )
+                sensory_needs = st.text_area(
+                    "Necesidades sensoriales",
+                    placeholder="Ejemplo: audífonos, luz baja, presión profunda, pausas de movimiento, ropa cómoda.",
+                    height=76,
+                )
+                emotional_needs = st.text_area(
+                    "Necesidades emocionales",
+                    placeholder="Ejemplo: validación breve, tono tranquilo, instrucciones claras, sentir control, anticipación.",
+                    height=76,
+                )
+                autonomy_level = st.text_input(
+                    "Nivel de autonomía",
+                    placeholder="Ejemplo: requiere apoyo para iniciar tareas, pero puede continuar con una guía breve.",
+                )
+                sleep_profile = st.text_input(
+                    "Sueño y descanso",
+                    placeholder="Ejemplo: tarda en dormir, despierta durante la noche, le afectan las pantallas.",
+                )
+                school_profile = st.text_input(
+                    "Escuela o trabajo",
+                    placeholder="Ejemplo: se satura en salones ruidosos, requiere instrucciones por pasos.",
+                )
+                executive_profile = st.text_input(
+                    "Organización y función ejecutiva",
+                    placeholder="Ejemplo: le cuesta iniciar, priorizar, estimar tiempos o terminar tareas largas.",
+                )
+                evolution_notes = st.text_area(
+                    "Observaciones de seguimiento",
+                    placeholder="Ejemplo: ha mejorado con rutinas visuales; conviene evitar preguntas largas cuando está saturado.",
+                    height=92,
+                )
+
+            submitted = st.form_submit_button("Guardar perfil individual")
 
             if submitted:
+                if not alias.strip():
+                    st.warning("Agrega un nombre o alias para identificar este perfil.")
+                    return
+
+                parsed_age: Optional[int] = None
+                if age_text.strip():
+                    try:
+                        parsed_age = int(age_text.strip())
+                    except ValueError:
+                        st.warning("La edad debe ser un número. Puedes dejarla vacía si no quieres registrarla.")
+                        return
+
                 pm = get_profile_manager(db_path)
                 try:
                     profile_id = pm.create_profile(
                         family_id=unit_options[unit_label],
-                        alias=alias or None,
-                        age=int(age) if age is not None else None,
+                        alias=alias.strip() or None,
+                        age=parsed_age,
                         role=role or None,
-                        conditions=_split_csv(conditions),
-                        strengths=_split_csv(strengths),
-                        triggers=_split_csv(triggers),
-                        early_signs=_split_csv(early_signs),
-                        helpful_strategies=_split_csv(helpful_strategies),
-                        harmful_strategies=_split_csv(harmful_strategies),
-                        sensory_needs=_split_csv(sensory_needs),
-                        emotional_needs=_split_csv(emotional_needs),
-                        autonomy_level=autonomy_level or None,
-                        sleep_profile=sleep_profile or None,
-                        school_profile=school_profile or None,
-                        executive_profile=executive_profile or None,
-                        evolution_notes=evolution_notes or None,
+                        conditions=_split_csv(conditions.replace("\n", ",")),
+                        strengths=_split_csv(strengths.replace("\n", ",")),
+                        triggers=_split_csv(triggers.replace("\n", ",")),
+                        early_signs=_split_csv(early_signs.replace("\n", ",")),
+                        helpful_strategies=_split_csv(helpful_strategies.replace("\n", ",")),
+                        harmful_strategies=_split_csv(harmful_strategies.replace("\n", ",")),
+                        sensory_needs=_split_csv(sensory_needs.replace("\n", ",")),
+                        emotional_needs=_split_csv(emotional_needs.replace("\n", ",")),
+                        autonomy_level=autonomy_level.strip() or None,
+                        sleep_profile=sleep_profile.strip() or None,
+                        school_profile=school_profile.strip() or None,
+                        executive_profile=executive_profile.strip() or None,
+                        evolution_notes=evolution_notes.strip() or None,
                     )
                     st.session_state.selected_family_id = unit_options[unit_label]
                     st.session_state.selected_profile_id = profile_id
-                    st.success(f"Perfil creado correctamente. ID: {profile_id}")
+                    st.success("Perfil guardado correctamente. Ya quedó seleccionado como contexto activo.")
                     st.rerun()
                 finally:
                     safe_close(pm)
 
         if embedded:
             st.markdown('</div></div>', unsafe_allow_html=True)
-
 
 
 def resolve_active_context_for_chat() -> Dict[str, Any]:
