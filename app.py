@@ -1953,6 +1953,98 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
             st.markdown('</div></div>', unsafe_allow_html=True)
 
 
+
+def resolve_active_context_for_chat() -> Dict[str, Any]:
+    """Resolve the currently selected family/profile before sending a turn.
+
+    This keeps Streamlit's UI selection, the orchestrator context and the
+    Supabase message log aligned. It also builds a compact profile payload that
+    can be injected into extra_context so deterministic/stable routes can still
+    personalize the response.
+    """
+    selected_family_id = st.session_state.get("selected_family_id")
+    selected_profile_id = st.session_state.get("selected_profile_id")
+
+    active_profile: Optional[Dict[str, Any]] = None
+    active_unit: Optional[Dict[str, Any]] = None
+
+    pm = get_profile_manager(st.session_state.db_path)
+    try:
+        if selected_profile_id:
+            active_profile = pm.get_profile(selected_profile_id)
+            if active_profile:
+                selected_profile_id = active_profile.get("profile_id") or selected_profile_id
+                selected_family_id = selected_family_id or active_profile.get("family_id")
+
+        if selected_family_id:
+            active_unit = pm.get_unit(selected_family_id)
+
+        # Fallback: if a family is selected and there is only one active profile,
+        # resolve it as the active profile. This avoids losing profile_id when the
+        # selectbox state is refreshed by Streamlit.
+        if selected_family_id and not active_profile:
+            profiles = pm.list_profiles(family_id=selected_family_id, only_active=True)
+            if len(profiles) == 1:
+                active_profile = profiles[0]
+                selected_profile_id = active_profile.get("profile_id")
+
+    finally:
+        safe_close(pm)
+
+    st.session_state.selected_family_id = selected_family_id
+    st.session_state.selected_profile_id = selected_profile_id
+
+    return {
+        "family_id": selected_family_id,
+        "profile_id": selected_profile_id,
+        "active_profile": active_profile,
+        "active_unit": active_unit,
+    }
+
+
+def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a small non-sensitive context payload for the orchestrator."""
+    profile = active_context.get("active_profile") or {}
+    unit = active_context.get("active_unit") or {}
+
+    if not profile and not unit:
+        return {}
+
+    return {
+        "active_family_id": active_context.get("family_id"),
+        "active_profile_id": active_context.get("profile_id"),
+        "active_profile": {
+            "profile_id": profile.get("profile_id"),
+            "family_id": profile.get("family_id"),
+            "alias": profile.get("alias"),
+            "age": profile.get("age"),
+            "role": profile.get("role"),
+            "conditions": profile.get("conditions") or [],
+            "strengths": profile.get("strengths") or [],
+            "triggers": profile.get("triggers") or [],
+            "early_signs": profile.get("early_signs") or [],
+            "helpful_strategies": profile.get("helpful_strategies") or [],
+            "harmful_strategies": profile.get("harmful_strategies") or [],
+            "sensory_needs": profile.get("sensory_needs") or [],
+            "emotional_needs": profile.get("emotional_needs") or [],
+            "autonomy_level": profile.get("autonomy_level"),
+            "sleep_profile": profile.get("sleep_profile"),
+            "school_profile": profile.get("school_profile"),
+            "executive_profile": profile.get("executive_profile"),
+            "evolution_notes": profile.get("evolution_notes"),
+        },
+        "active_unit": {
+            "family_id": unit.get("family_id"),
+            "unit_type": unit.get("unit_type"),
+            "caregiver_alias": unit.get("caregiver_alias"),
+            "context_notes": unit.get("context_notes"),
+            "support_network": unit.get("support_network"),
+            "environmental_factors": unit.get("environmental_factors"),
+            "global_history": unit.get("global_history"),
+        },
+    }
+
+
 # ---------------------------------------------------------
 # CHAT ACTION
 # ---------------------------------------------------------
@@ -1962,10 +2054,21 @@ def process_user_message(user_message: str) -> None:
     The visible chat is stored in st.session_state.chat_history.
     A lightweight log is also written to Supabase/PostgreSQL in public.ng_messages
     when DATABASE_URL is configured.
+
+    Important:
+    The selected family/profile is resolved immediately before calling the
+    orchestrator. This prevents Streamlit reruns from leaving the UI with
+    "Contexto activo" while the backend receives None.
     """
     user_message = (user_message or "").strip()
     if not user_message:
         return
+
+    active_context = resolve_active_context_for_chat()
+    active_family_id = active_context.get("family_id")
+    active_profile_id = active_context.get("profile_id")
+    active_profile = active_context.get("active_profile") or {}
+    profile_context_payload = build_profile_context_payload(active_context)
 
     previous_conversation_frame = {}
     if isinstance(st.session_state.last_result, dict):
@@ -1975,11 +2078,17 @@ def process_user_message(user_message: str) -> None:
     try:
         result = orch.process_message(
             message=user_message,
-            family_id=st.session_state.selected_family_id,
-            profile_id=st.session_state.selected_profile_id,
+            family_id=active_family_id,
+            profile_id=active_profile_id,
+            profile_alias=active_profile.get("alias"),
             extra_context={
                 "session_scope_id": st.session_state.session_scope_id,
                 "conversation_frame": previous_conversation_frame,
+                "selected_family_id": active_family_id,
+                "selected_profile_id": active_profile_id,
+                "profile_context": profile_context_payload,
+                "active_profile": profile_context_payload.get("active_profile", {}),
+                "active_unit": profile_context_payload.get("active_unit", {}),
             },
             chat_history=build_history_hint(),
             auto_save_case=True,
@@ -2006,6 +2115,23 @@ def process_user_message(user_message: str) -> None:
         session_id = st.session_state.get("session_id") or str(uuid.uuid4())
         st.session_state.session_id = session_id
 
+        # Prefer the IDs returned by the orchestrator if available; otherwise use
+        # the context selected in the UI. This keeps ng_messages aligned with
+        # ng_profiles and ng_families.
+        result_active_profile = result.get("active_profile") or {}
+        result_unit_context = result.get("unit_context") or {}
+        effective_profile_id = (
+            result_active_profile.get("profile_id")
+            or active_profile_id
+            or st.session_state.get("selected_profile_id")
+        )
+        effective_family_id = (
+            result_active_profile.get("family_id")
+            or result_unit_context.get("family_id")
+            or active_family_id
+            or st.session_state.get("selected_family_id")
+        )
+
         detected_category = (
             result.get("detected_category")
             or result.get("category")
@@ -2025,8 +2151,8 @@ def process_user_message(user_message: str) -> None:
             message=user_message,
             detected_category=detected_category,
             emotional_state=emotional_state,
-            profile_id=st.session_state.selected_profile_id,
-            family_id=st.session_state.selected_family_id,
+            profile_id=effective_profile_id,
+            family_id=effective_family_id,
         )
 
         save_message_to_db(
@@ -2035,14 +2161,13 @@ def process_user_message(user_message: str) -> None:
             message=assistant_text,
             detected_category=detected_category,
             emotional_state=emotional_state,
-            profile_id=st.session_state.selected_profile_id,
-            family_id=st.session_state.selected_family_id,
+            profile_id=effective_profile_id,
+            family_id=effective_family_id,
         )
 
         st.session_state.last_result = result
     finally:
         safe_close(orch)
-
 
 # ---------------------------------------------------------
 # MAIN
