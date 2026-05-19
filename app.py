@@ -4,9 +4,6 @@ from __future__ import annotations
 import base64
 import html
 import os
-
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-
 import sys
 import uuid
 from datetime import datetime
@@ -14,7 +11,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
-from sqlalchemy import create_engine, text
 
 # ---------------------------------------------------------
 # PATH SETUP
@@ -42,73 +38,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-
-# ---------------------------------------------------------
-# SUPABASE / POSTGRESQL MESSAGE LOGGING
-# ---------------------------------------------------------
-@st.cache_resource
-def get_message_db_engine():
-    """Create a cached SQLAlchemy engine for the Supabase/PostgreSQL database.
-
-    The value is read from Streamlit Secrets first and then from environment
-    variables. If DATABASE_URL is not configured, the app continues working
-    without persistence and stores the issue in st.session_state.
-    """
-    try:
-        database_url = st.secrets.get("DATABASE_URL", None)
-    except Exception:
-        database_url = None
-
-    database_url = database_url or os.getenv("DATABASE_URL")
-    if not database_url:
-        return None
-
-    return create_engine(str(database_url), pool_pre_ping=True)
-
-
-def save_message_to_db(
-    session_id: str,
-    user_role: str,
-    message: str,
-    detected_category: Optional[str] = None,
-    emotional_state: Optional[str] = None,
-    profile_id: Optional[str] = None,
-    family_id: Optional[str] = None,
-) -> None:
-    """Persist a chat message in public.ng_messages.
-
-    This function is intentionally fail-safe: if the database is unavailable,
-    the conversation still works in Streamlit and the error is kept in
-    st.session_state["db_message_log_error"] for debugging.
-    """
-    engine = get_message_db_engine()
-    if engine is None:
-        st.session_state["db_message_log_error"] = "DATABASE_URL no está configurada."
-        return
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text("""
-                    insert into public.ng_messages
-                    (session_id, user_role, message, detected_category, emotional_state, profile_id, family_id)
-                    values
-                    (:session_id, :user_role, :message, :detected_category, :emotional_state, :profile_id, :family_id)
-                """),
-                {
-                    "session_id": session_id,
-                    "user_role": user_role,
-                    "message": message,
-                    "detected_category": detected_category,
-                    "emotional_state": emotional_state,
-                    "profile_id": profile_id,
-                    "family_id": family_id,
-                },
-            )
-        st.session_state.pop("db_message_log_error", None)
-    except Exception as exc:
-        st.session_state["db_message_log_error"] = str(exc)
 
 # ---------------------------------------------------------
 # ESTILOS UI
@@ -743,127 +672,6 @@ st.markdown(
             max-width: 100%;
         }
     }
-
-    /* -----------------------------------------------------
-       Ajustes responsivos y corrección de texto en móvil
-       ----------------------------------------------------- */
-    div[data-baseweb="input"] input,
-    textarea,
-    input {
-        color: #2f241f !important;
-        -webkit-text-fill-color: #2f241f !important;
-        caret-color: #b86e54 !important;
-    }
-
-    div[data-baseweb="input"] input::placeholder,
-    textarea::placeholder {
-        color: #8c7b72 !important;
-        -webkit-text-fill-color: #8c7b72 !important;
-    }
-
-    .ng-message,
-    .ng-message-user,
-    .ng-message-assistant {
-        color: #2f241f !important;
-    }
-
-    @media (max-width: 900px) {
-        .block-container {
-            padding-left: 0.55rem !important;
-            padding-right: 0.55rem !important;
-            padding-top: 0.45rem !important;
-        }
-
-        .ng-header-inner {
-            padding: 0.8rem 0.85rem !important;
-            border-radius: 22px !important;
-        }
-
-        .ng-brand-logo {
-            width: 36px !important;
-            height: 36px !important;
-        }
-
-        .ng-brand-title {
-            font-size: 1.25rem !important;
-        }
-
-        .ng-header-subtitle,
-        .ng-header-line {
-            font-size: 0.82rem !important;
-            line-height: 1.45 !important;
-        }
-
-        .ng-side-card,
-        .ng-quick-card,
-        .ng-conversation-card,
-        .ng-card {
-            border-radius: 18px !important;
-            padding: 0.72rem !important;
-        }
-
-        .ng-logo-full-image {
-            width: 118px !important;
-            margin: 0 auto !important;
-        }
-
-        .ng-sidebar-title,
-        .ng-section-title,
-        .ng-quick-title {
-            font-size: 0.92rem !important;
-        }
-
-        .ng-side-note,
-        .ng-soft-note,
-        .ng-quick-subtitle {
-            font-size: 0.80rem !important;
-        }
-
-        .ng-message {
-            max-width: 100% !important;
-            font-size: 0.90rem !important;
-            line-height: 1.50 !important;
-            padding: 0.64rem 0.72rem !important;
-            color: #2f241f !important;
-        }
-
-        .ng-message-user,
-        .ng-message-assistant {
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-        }
-
-        .stButton > button,
-        div[data-testid="stFormSubmitButton"] button,
-        div[data-testid="stDownloadButton"] button {
-            min-height: 38px !important;
-            padding: 0.45rem 0.60rem !important;
-            font-size: 0.82rem !important;
-            border-radius: 14px !important;
-        }
-
-        .ng-quick-button .stButton > button {
-            min-height: 38px !important;
-            font-size: 0.82rem !important;
-            line-height: 1.22 !important;
-        }
-
-        .ng-composer-wrap div[data-baseweb="input"] > div {
-            min-height: 44px !important;
-        }
-
-        .ng-composer-wrap div[data-testid="stFormSubmitButton"] button {
-            min-height: 44px !important;
-            min-width: 82px !important;
-        }
-
-        div[data-baseweb="input"] input,
-        textarea,
-        input {
-            font-size: 0.90rem !important;
-        }
-    }
-
     </style>
     """,
     unsafe_allow_html=True,
@@ -878,8 +686,6 @@ STREAMLIT_SECRET_ENV_KEYS = (
     "OPENAI_MODEL",
     "OPENAI_TIMEOUT_SECONDS",
     "DEBUG_MODE",
-    "DATABASE_URL",
-    "DB_BACKEND",
 )
 
 
@@ -900,7 +706,7 @@ def _get_streamlit_secret_value(key: str) -> Optional[Any]:
         key.lower(),
         key.replace("OPENAI_", "").lower(),
     }
-    for section_name in ("openai", "OPENAI", "llm", "LLM", "debug", "DEBUG", "database", "DATABASE"):
+    for section_name in ("openai", "OPENAI", "llm", "LLM", "debug", "DEBUG"):
         try:
             section = secrets.get(section_name)
         except Exception:
@@ -937,7 +743,6 @@ def sync_streamlit_secrets_to_env() -> Dict[str, Any]:
         "has_openai_api_key": bool(str(os.getenv("OPENAI_API_KEY", "") or "").strip()),
         "use_openai_llm_raw": str(os.getenv("USE_OPENAI_LLM", "") or "").strip(),
         "openai_model": str(os.getenv("OPENAI_MODEL", "") or "").strip(),
-        "has_database_url": bool(str(os.getenv("DATABASE_URL", "") or "").strip()),
     }
 
 
@@ -948,9 +753,31 @@ def env_flag(name: str, default: bool = False) -> bool:
     return raw_value in {"1", "true", "yes", "y", "on", "si", "sí", "enabled"}
 
 
+def derive_database_backend(default: str = "sqlite") -> str:
+    """Resolve the active database backend for Streamlit.
+
+    In Streamlit Cloud, DATABASE_URL can exist even if DB_BACKEND was not
+    explicitly set. When DATABASE_URL is present, PostgreSQL/Supabase must be
+    used for profiles, families, memory and messages.
+    """
+    raw_backend = str(os.getenv("DB_BACKEND", "") or "").strip().lower()
+    database_url = str(os.getenv("DATABASE_URL", "") or "").strip()
+
+    if raw_backend:
+        return raw_backend
+    if database_url:
+        os.environ["DB_BACKEND"] = "postgres"
+        return "postgres"
+    return default
+
+
 def bootstrap_environment(env_path: str) -> None:
     load_env_file(env_path)
     st.session_state["streamlit_secrets_sync"] = sync_streamlit_secrets_to_env()
+    # Si existe DATABASE_URL, toda la app debe trabajar sobre Supabase/PostgreSQL.
+    # Esto evita que familias/perfiles se creen en SQLite local mientras
+    # ng_messages se guarda en Supabase.
+    derive_database_backend()
 
 
 def bootstrap_database(db_backend: str, db_path: str) -> None:
@@ -959,7 +786,8 @@ def bootstrap_database(db_backend: str, db_path: str) -> None:
 
 
 def get_profile_manager(db_path: str) -> ProfileManager:
-    return ProfileManager(db_path=db_path)
+    backend = st.session_state.get("db_backend") or derive_database_backend()
+    return ProfileManager(db_path=db_path, backend=backend)
 
 
 def get_orchestrator(db_path: str) -> NeuroGuiaOrchestratorV2:
@@ -981,7 +809,7 @@ def safe_close(obj: Any) -> None:
 def init_session_state() -> None:
     st.session_state.setdefault("env_path", DEFAULT_ENV_PATH)
     st.session_state.setdefault("db_path", DEFAULT_DB_PATH)
-    st.session_state.setdefault("db_backend", os.getenv("DB_BACKEND", "sqlite").strip().lower())
+    st.session_state.setdefault("db_backend", derive_database_backend())
     st.session_state.setdefault("session_scope_id", uuid.uuid4().hex)
     st.session_state.setdefault("selected_family_id", None)
     st.session_state.setdefault("selected_profile_id", None)
@@ -1123,7 +951,6 @@ def conversation_export_filename() -> str:
 def clear_visible_conversation() -> None:
     st.session_state.chat_history = []
     st.session_state.last_result = None
-    st.session_state.session_id = uuid.uuid4().hex
 
 
 def restart_temporary_session() -> None:
@@ -1867,7 +1694,10 @@ def create_unit_ui(db_path: str, embedded: bool = False) -> None:
                         environmental_factors=environmental_factors or None,
                         global_history=global_history or None,
                     )
+                    st.session_state.selected_family_id = family_id
+                    st.session_state.selected_profile_id = None
                     st.success(f"Registro creado correctamente. ID: {family_id}")
+                    st.rerun()
                 finally:
                     safe_close(pm)
 
@@ -1945,7 +1775,10 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
                         executive_profile=executive_profile or None,
                         evolution_notes=evolution_notes or None,
                     )
+                    st.session_state.selected_family_id = unit_options[unit_label]
+                    st.session_state.selected_profile_id = profile_id
                     st.success(f"Perfil creado correctamente. ID: {profile_id}")
+                    st.rerun()
                 finally:
                     safe_close(pm)
 
@@ -1955,12 +1788,11 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
 
 
 def resolve_active_context_for_chat() -> Dict[str, Any]:
-    """Resolve the currently selected family/profile before sending a turn.
+    """Resolve the selected family/profile immediately before sending a turn.
 
-    This keeps Streamlit's UI selection, the orchestrator context and the
-    Supabase message log aligned. It also builds a compact profile payload that
-    can be injected into extra_context so deterministic/stable routes can still
-    personalize the response.
+    This keeps Streamlit's visual selection, the orchestrator and Supabase logs
+    aligned. It also protects against reruns where the selector looks active
+    but the backend receives None.
     """
     selected_family_id = st.session_state.get("selected_family_id")
     selected_profile_id = st.session_state.get("selected_profile_id")
@@ -1979,15 +1811,11 @@ def resolve_active_context_for_chat() -> Dict[str, Any]:
         if selected_family_id:
             active_unit = pm.get_unit(selected_family_id)
 
-        # Fallback: if a family is selected and there is only one active profile,
-        # resolve it as the active profile. This avoids losing profile_id when the
-        # selectbox state is refreshed by Streamlit.
         if selected_family_id and not active_profile:
             profiles = pm.list_profiles(family_id=selected_family_id, only_active=True)
             if len(profiles) == 1:
                 active_profile = profiles[0]
                 selected_profile_id = active_profile.get("profile_id")
-
     finally:
         safe_close(pm)
 
@@ -2003,7 +1831,7 @@ def resolve_active_context_for_chat() -> Dict[str, Any]:
 
 
 def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, Any]:
-    """Build a small non-sensitive context payload for the orchestrator."""
+    """Build a compact profile/unit payload for the orchestrator."""
     profile = active_context.get("active_profile") or {}
     unit = active_context.get("active_unit") or {}
 
@@ -2051,14 +1879,9 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
 def process_user_message(user_message: str) -> None:
     """Process one user message, render it locally, and persist both turns.
 
-    The visible chat is stored in st.session_state.chat_history.
-    A lightweight log is also written to Supabase/PostgreSQL in public.ng_messages
-    when DATABASE_URL is configured.
-
-    Important:
-    The selected family/profile is resolved immediately before calling the
-    orchestrator. This prevents Streamlit reruns from leaving the UI with
-    "Contexto activo" while the backend receives None.
+    The selected profile/family is resolved immediately before the orchestrator
+    call. This prevents Streamlit reruns from showing "Contexto activo" while
+    the backend receives NULL IDs.
     """
     user_message = (user_message or "").strip()
     if not user_message:
@@ -2115,18 +1938,17 @@ def process_user_message(user_message: str) -> None:
         session_id = st.session_state.get("session_id") or str(uuid.uuid4())
         st.session_state.session_id = session_id
 
-        # Prefer the IDs returned by the orchestrator if available; otherwise use
-        # the context selected in the UI. This keeps ng_messages aligned with
-        # ng_profiles and ng_families.
         result_active_profile = result.get("active_profile") or {}
         result_unit_context = result.get("unit_context") or {}
         effective_profile_id = (
-            result_active_profile.get("profile_id")
+            result.get("profile_id")
+            or result_active_profile.get("profile_id")
             or active_profile_id
             or st.session_state.get("selected_profile_id")
         )
         effective_family_id = (
-            result_active_profile.get("family_id")
+            result.get("family_id")
+            or result_active_profile.get("family_id")
             or result_unit_context.get("family_id")
             or active_family_id
             or st.session_state.get("selected_family_id")
@@ -2168,6 +1990,7 @@ def process_user_message(user_message: str) -> None:
         st.session_state.last_result = result
     finally:
         safe_close(orch)
+
 
 # ---------------------------------------------------------
 # MAIN
