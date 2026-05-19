@@ -88,13 +88,13 @@ st.markdown(
     }
 
     .block-container {
-        max-width: 1240px;
+        max-width: 1680px;
         padding-top: 0.9rem;
         padding-bottom: 1.85rem;
     }
 
     .ng-page {
-        max-width: 1160px;
+        max-width: 1600px;
         margin: 0 auto;
     }
 
@@ -183,7 +183,7 @@ st.markdown(
     }
 
     .ng-header-inner {
-        max-width: 920px;
+        max-width: 1400px;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
@@ -258,7 +258,7 @@ st.markdown(
     .ng-header-line {
         margin: 0;
         color: var(--ng-subtext);
-        max-width: 760px;
+        max-width: 1200px;
         font-size: 0.92rem;
         line-height: 1.6;
     }
@@ -419,7 +419,7 @@ st.markdown(
     }
 
     .ng-message {
-        max-width: 80%;
+        max-width: 92%;
         border-radius: 19px;
         padding: 0.7rem 0.86rem;
         margin-bottom: 0.42rem;
@@ -653,6 +653,24 @@ st.markdown(
     .stCaption {
         color: var(--ng-subtext) !important;
     }
+
+    
+    .ng-side-card {
+        min-width: 100% !important;
+    }
+
+    .stSelectbox > div[data-baseweb="select"] {
+        min-width: 100% !important;
+    }
+
+    .stTextInput, .stTextArea {
+        width: 100% !important;
+    }
+
+    .ng-conversation-card {
+        width: 100% !important;
+    }
+
 
     @media (max-width: 900px) {
         .block-container {
@@ -1014,14 +1032,14 @@ def render_app_header(show_full_logo: bool = True) -> None:
     )
     st.markdown(
         f"""
-        <section class="ng-header" aria-label="Cabecera de neuroGuIA">
+        <section class="ng-header" aria-label="Cabecera de neuroguIA">
             <div class="ng-header-inner">
                 <div class="ng-brand-line">
                     <div class="ng-brand-logo">{logo_html}</div>
                     <p class="ng-brand-title">neuroguIA</p>
                 </div>
-                <p class="ng-header-subtitle">Un espacio de apoyo calido, claro y adaptativo para acompanarte paso a paso.</p>
-                <p class="ng-header-subtitle">Acompanamiento inteligente y humano para momentos dificiles, organizacion, prevencion y apoyo emocional.</p>
+                <p class="ng-header-subtitle">Un espacio de apoyo cálido, claro y adaptativo para acompañarte paso a paso.</p>
+                <p class="ng-header-subtitle">Acompañamiento inteligente y humano para momentos difíciles, organización, prevención y apoyo emocional.</p>
             </div>
         </section>
         """,
@@ -2163,7 +2181,7 @@ def main() -> None:
     render_app_header(show_full_logo=False)
     user_message = None
     st.markdown('<div class="ng-layout-grid">', unsafe_allow_html=True)
-    col_left, col_center, col_right = st.columns([0.82, 2.58, 0.96], gap="medium")
+    col_left, col_center, col_right = st.columns([1.25, 4.2, 1.35], gap="large")
 
     with col_left:
         render_context_sidebar(units, unit_profiles)
