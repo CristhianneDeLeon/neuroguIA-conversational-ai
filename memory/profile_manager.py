@@ -7,6 +7,11 @@ from typing import Any, Dict, List, Optional
 
 from database.database import NeuroGuiaDB
 
+try:
+    from psycopg.types.json import Jsonb
+except Exception:  # pragma: no cover
+    Jsonb = None
+
 
 class ProfileManager:
     """
@@ -17,6 +22,17 @@ class ProfileManager:
 
     def __init__(self, db_path: str = "neuroguia.db", backend: Optional[str] = None, env_path: str = ".env") -> None:
         self.db = NeuroGuiaDB(db_path=db_path, backend=backend, env_path=env_path)
+
+        # En SQLite histórico las tablas se llaman families/profiles.
+        # En Supabase/PostgreSQL el esquema académico usa ng_families/ng_profiles.
+        # Mantener estos alias evita que la app guarde perfiles en SQLite local
+        # mientras los mensajes se escriben en Supabase.
+        if self.db.backend_name == "postgres":
+            self.family_table = "ng_families"
+            self.profile_table = "ng_profiles"
+        else:
+            self.family_table = "families"
+            self.profile_table = "profiles"
 
     # =========================================================
     # UTILIDADES
@@ -32,9 +48,11 @@ class ProfileManager:
             return ""
         return " ".join(str(value).strip().lower().split())
 
-    def _to_json(self, value: Any, default: Any = None) -> str:
+    def _to_json(self, value: Any, default: Any = None) -> Any:
         if value is None:
             value = [] if default is None else default
+        if self.db.backend_name == "postgres" and Jsonb is not None:
+            return Jsonb(value)
         return json.dumps(value, ensure_ascii=False)
 
     def _from_json(self, value: Any, default: Any = None) -> Any:
@@ -101,8 +119,8 @@ class ProfileManager:
         now = self._now()
 
         self.db.execute(
-            """
-            INSERT INTO families (
+            f"""
+            INSERT INTO {self.family_table} (
                 family_id, unit_type, caregiver_alias,
                 context_notes, support_network, environmental_factors, global_history,
                 created_at, updated_at
@@ -125,7 +143,7 @@ class ProfileManager:
 
     def list_units(self, limit: int = 100) -> List[Dict[str, Any]]:
         rows = self.db.execute(
-            "SELECT * FROM families ORDER BY updated_at DESC LIMIT ?",
+            f"SELECT * FROM {self.family_table} ORDER BY updated_at DESC LIMIT ?",
             (limit,),
             fetch=True,
         ) or []
@@ -133,7 +151,7 @@ class ProfileManager:
 
     def get_unit(self, family_id: str) -> Optional[Dict[str, Any]]:
         row = self.db.execute(
-            "SELECT * FROM families WHERE family_id = ? LIMIT 1",
+            f"SELECT * FROM {self.family_table} WHERE family_id = ? LIMIT 1",
             (family_id,),
             fetch_one=True,
         )
@@ -169,7 +187,7 @@ class ProfileManager:
         values.append(family_id)
 
         query = f"""
-        UPDATE families
+        UPDATE {self.family_table}
         SET {', '.join(fields)}
         WHERE family_id = ?
         """
@@ -207,8 +225,8 @@ class ProfileManager:
         now = self._now()
 
         self.db.execute(
-            """
-            INSERT INTO profiles (
+            f"""
+            INSERT INTO {self.profile_table} (
                 profile_id, family_id, alias, age, role,
                 conditions, strengths, triggers, early_signs,
                 helpful_strategies, harmful_strategies,
@@ -245,7 +263,7 @@ class ProfileManager:
         return profile_id
 
     def list_profiles(self, family_id: str, only_active: bool = True) -> List[Dict[str, Any]]:
-        query = "SELECT * FROM profiles WHERE family_id = ?"
+        query = f"SELECT * FROM {self.profile_table} WHERE family_id = ?"
         params: List[Any] = [family_id]
 
         if only_active:
@@ -259,7 +277,7 @@ class ProfileManager:
 
     def get_profile(self, profile_id: str) -> Optional[Dict[str, Any]]:
         row = self.db.execute(
-            "SELECT * FROM profiles WHERE profile_id = ? LIMIT 1",
+            f"SELECT * FROM {self.profile_table} WHERE profile_id = ? LIMIT 1",
             (profile_id,),
             fetch_one=True,
         )
@@ -324,7 +342,7 @@ class ProfileManager:
         values.append(profile_id)
 
         query = f"""
-        UPDATE profiles
+        UPDATE {self.profile_table}
         SET {', '.join(fields)}
         WHERE profile_id = ?
         """
