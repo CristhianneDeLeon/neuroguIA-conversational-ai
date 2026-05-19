@@ -2684,12 +2684,54 @@ class NeuroGuiaOrchestratorV2:
         unit_context = self._resolve_unit_context(family_id=family_id)
 
         # -----------------------------------------------------
-        # 0) MARCO PREVIO DE CONVERSACIÓN
+        # 0) PERFIL ACTIVO TEMPRANO
+        # -----------------------------------------------------
+        # Se resuelve antes de las rutas estables para que los atajos
+        # conversacionales no pierdan el contexto seleccionado en la UI.
+        # Esto evita que neuroguIA responda como si hablara con otro perfil
+        # o que guarde memoria sin profile_id/family_id.
+        active_profile = self.profile_manager.resolve_active_profile(
+            family_id=family_id,
+            profile_id=profile_id,
+            profile_alias=profile_alias or extra_context.get("profile_alias"),
+            message=message,
+        )
+        effective_family_id = family_id or (active_profile.get("family_id") if active_profile else None)
+        effective_profile_id = active_profile.get("profile_id") if active_profile else profile_id
+
+        # -----------------------------------------------------
+        # 1) MARCO PREVIO DE CONVERSACIÓN
         # -----------------------------------------------------
         previous_frame = self._infer_previous_conversation_frame(
             chat_history=chat_history,
             extra_context=extra_context,
         )
+        if active_profile:
+            profile_context = {
+                "profile_id": active_profile.get("profile_id"),
+                "family_id": active_profile.get("family_id") or family_id,
+                "alias": active_profile.get("alias"),
+                "age": active_profile.get("age"),
+                "role": active_profile.get("role"),
+                "conditions": active_profile.get("conditions") or [],
+                "strengths": active_profile.get("strengths") or [],
+                "triggers": active_profile.get("triggers") or [],
+                "helpful_strategies": active_profile.get("helpful_strategies") or [],
+                "harmful_strategies": active_profile.get("harmful_strategies") or [],
+                "sensory_needs": active_profile.get("sensory_needs") or [],
+                "emotional_needs": active_profile.get("emotional_needs") or [],
+                "executive_profile": active_profile.get("executive_profile"),
+                "sleep_profile": active_profile.get("sleep_profile"),
+            }
+            previous_frame = dict(previous_frame or {})
+            previous_frame["active_profile_context"] = profile_context
+            previous_frame["profile_id"] = effective_profile_id
+            previous_frame["family_id"] = effective_family_id
+            role_key = _stable_demo_normalize(str(active_profile.get("role") or ""))
+            if role_key in {"adolescente", "usuario individual", "usuario_individual"}:
+                previous_frame["support_subject"] = "self"
+            elif role_key in {"hijo", "hija", "nino", "nina", "ni o", "ni a"}:
+                previous_frame.setdefault("support_subject", "child")
 
         context_override = self._detect_context_override(
             message=message,
@@ -2721,6 +2763,9 @@ class NeuroGuiaOrchestratorV2:
                     user_context_store_result=user_context_store_result,
                     conversation_curation_result=conversation_curation_result,
                     session_scope_id=session_scope_id,
+                    active_profile=active_profile,
+                    requested_family_id=family_id,
+                    requested_profile_id=profile_id,
                     chat_history=chat_history,
                     chat_history_size=len(chat_history or []),
                 )
@@ -2742,20 +2787,19 @@ class NeuroGuiaOrchestratorV2:
                 user_context_store_result=user_context_store_result,
                 conversation_curation_result=conversation_curation_result,
                 session_scope_id=session_scope_id,
+                active_profile=active_profile,
+                requested_family_id=family_id,
+                requested_profile_id=profile_id,
                 chat_history=chat_history,
                 chat_history_size=len(chat_history or []),
             )
 
         # -----------------------------------------------------
-        # 1) PERFIL ACTIVO
+        # 2) PERFIL ACTIVO
         # -----------------------------------------------------
-        active_profile = self.profile_manager.resolve_active_profile(
-            family_id=family_id,
-            profile_id=profile_id,
-            profile_alias=profile_alias or extra_context.get("profile_alias"),
-            message=effective_message,
-        )
-
+        # Ya se resolvió al inicio del turno para que también esté disponible
+        # en las rutas stable_demo. Se conserva este bloque lógico para no
+        # alterar el resto del pipeline.
         if active_profile:
             exceptionality_analysis = self.exceptionality_mapper.analyze_profile(active_profile)
             support_plan = self.exceptionality_mapper.map_profile_to_support_plan(active_profile)
@@ -3554,6 +3598,8 @@ class NeuroGuiaOrchestratorV2:
             "llm_curated_payload": llm_curated_payload,
             "conversation_curation_result": conversation_curation_result,
             "session_scope_id": session_scope_id,
+            "profile_id": effective_profile_id,
+            "family_id": effective_family_id,
             "response_package": response_package,
         }
 
@@ -3569,10 +3615,25 @@ class NeuroGuiaOrchestratorV2:
         user_context_store_result: Dict[str, Any],
         conversation_curation_result: Dict[str, Any],
         session_scope_id: Optional[str],
+        active_profile: Optional[Dict[str, Any]] = None,
+        requested_family_id: Optional[str] = None,
+        requested_profile_id: Optional[str] = None,
         chat_history: Optional[List[Dict[str, Any]]] = None,
         chat_history_size: int = 0,
     ) -> Dict[str, Any]:
         chat_history = chat_history or []
+        active_profile = active_profile or {}
+        effective_profile_id = (
+            active_profile.get("profile_id")
+            or requested_profile_id
+            or None
+        )
+        effective_family_id = (
+            requested_family_id
+            or active_profile.get("family_id")
+            or unit_context.get("family_id")
+            or None
+        )
         base_response_text = str(stable_demo.get("response_text") or "").strip()
         response_text = base_response_text
         route_id = str(stable_demo.get("route_id") or "").strip()
@@ -3591,6 +3652,32 @@ class NeuroGuiaOrchestratorV2:
             or {}
         )
         behavioral_plan = dict(stable_demo.get("behavioral_plan") or conversation_frame.get("behavioral_plan") or {})
+        if active_profile:
+            profile_context = {
+                "profile_id": effective_profile_id,
+                "family_id": effective_family_id,
+                "alias": active_profile.get("alias"),
+                "age": active_profile.get("age"),
+                "role": active_profile.get("role"),
+                "conditions": active_profile.get("conditions") or [],
+                "strengths": active_profile.get("strengths") or [],
+                "triggers": active_profile.get("triggers") or [],
+                "helpful_strategies": active_profile.get("helpful_strategies") or [],
+                "harmful_strategies": active_profile.get("harmful_strategies") or [],
+                "sensory_needs": active_profile.get("sensory_needs") or [],
+                "emotional_needs": active_profile.get("emotional_needs") or [],
+                "executive_profile": active_profile.get("executive_profile"),
+                "sleep_profile": active_profile.get("sleep_profile"),
+            }
+            behavioral_plan["active_profile_context"] = profile_context
+            behavioral_plan["profile_use_instruction"] = (
+                "Usa el perfil activo como contexto principal. No asumas hijos, madre, padre "
+                "o cuidador si el perfil activo indica que la persona habla de si misma. "
+                "Si el alias/rol del perfil aparece, adapta el lenguaje a ese perfil sin diagnosticar."
+            )
+            conversation_frame["active_profile_context"] = profile_context
+            conversation_frame["profile_id"] = effective_profile_id
+            conversation_frame["family_id"] = effective_family_id
         if behavioral_plan:
             behavioral_plan["base_guidance"] = base_response_text
             behavioral_plan["recent_user_message"] = message
@@ -3890,32 +3977,85 @@ class NeuroGuiaOrchestratorV2:
         }
         support_plan = self._empty_support_plan()
         exceptionality_analysis = self._empty_exceptionality_analysis()
-        user_context_payload = {
-            **(user_context_payload or {}),
-            "available": False,
-            "reason": "stable_demo_bypass",
-            "session_scope_id": session_scope_id,
-        }
-        user_context_store_result = {
-            **(user_context_store_result or {}),
-            "stored": False,
-            "reason": "stable_demo_bypass",
-        }
+        try:
+            user_context_payload = self.user_context_memory.build_live_context_payload(
+                profile_id=effective_profile_id,
+                family_id=effective_family_id,
+                session_scope_id=session_scope_id,
+            )
+        except Exception as exc:
+            user_context_payload = self._empty_user_context_payload(
+                session_scope_id=session_scope_id,
+                reason=f"stable_demo_user_context_unavailable:{type(exc).__name__}",
+            )
+
+        saved_case_id = None
+        try:
+            saved_case_id = self.case_memory.create_case(
+                family_id=effective_family_id,
+                profile_id=effective_profile_id,
+                unit_type=unit_context.get("unit_type", "individual"),
+                raw_input=message,
+                normalized_summary=self._normalize_summary(effective_message),
+                detected_category=category_analysis.get("detected_category"),
+                detected_stage=stage_result.get("stage"),
+                primary_state=state_analysis.get("primary_state"),
+                secondary_states=state_analysis.get("secondary_states", []),
+                suggested_strategy=decision_payload.get("selected_strategy"),
+                suggested_microaction=decision_payload.get("selected_microaction"),
+                response_mode=decision_payload.get("decision_mode"),
+                followup_needed=False,
+                tags=self._deduplicate([
+                    conversation_frame.get("conversation_domain") or "",
+                    conversation_frame.get("support_subject") or "",
+                    conversation_frame.get("conversation_phase") or "",
+                    "stable_demo",
+                ]),
+            )
+        except Exception as exc:
+            saved_case_id = None
+            conversation_frame["case_memory_error"] = f"stable_demo_case_store_failed:{type(exc).__name__}"
+
+        try:
+            user_context_store_result = self.user_context_memory.register_turn_context(
+                source_message=message,
+                family_id=effective_family_id,
+                profile_id=effective_profile_id,
+                session_scope_id=session_scope_id,
+                extra_context={"active_profile_context": conversation_frame.get("active_profile_context") or {}},
+                conversation_frame=conversation_frame,
+                category_analysis=category_analysis,
+                intent_analysis=intent_analysis,
+                state_analysis=state_analysis,
+                confidence_payload=confidence_payload,
+                decision_payload=decision_payload,
+                memory_payload={},
+                response_memory_payload={},
+                llm_curated_payload=llm_curated_payload or {},
+                source_case_id=saved_case_id,
+            )
+        except Exception as exc:
+            user_context_store_result = {
+                "stored": False,
+                "reason": f"stable_demo_user_context_store_failed:{type(exc).__name__}",
+                "payload": None,
+            }
+
         conversation_curation_result = {
             **(conversation_curation_result or {}),
             "stored": False,
-            "reason": "stable_demo_bypass",
+            "reason": "stable_demo_not_curatable_by_default",
             "curation_id": None,
         }
 
         return {
-            "case_id": None,
+            "case_id": saved_case_id,
             "stored_response_id": None,
             "curated_llm_response_id": None,
             "learning_payload": None,
             "learning_store_result": None,
             "unit_context": unit_context,
-            "active_profile": None,
+            "active_profile": active_profile or None,
             "exceptionality_analysis": exceptionality_analysis,
             "support_plan": support_plan,
             "conversation_control": conversation_control,
