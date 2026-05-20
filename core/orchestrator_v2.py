@@ -2808,6 +2808,26 @@ class NeuroGuiaOrchestratorV2:
             support_plan = self._empty_support_plan()
 
         # -----------------------------------------------------
+        # 1.1) RESPUESTA DIRECTA A IDENTIDAD DEL PERFIL ACTIVO
+        # -----------------------------------------------------
+        if self._is_active_profile_identity_question(effective_message):
+            return self._build_profile_identity_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                support_plan=support_plan,
+                exceptionality_analysis=exceptionality_analysis,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
+                chat_history=chat_history,
+            )
+
+        # -----------------------------------------------------
         # 2) ESTADO FUNCIONAL
         # -----------------------------------------------------
         merged_context = dict(unit_context)
@@ -3000,6 +3020,7 @@ class NeuroGuiaOrchestratorV2:
             family_id=family_id,
             tags=tags,
             min_reuse_score=0.50,
+            limit=8,
         )
 
         # -----------------------------------------------------
@@ -5671,6 +5692,145 @@ class NeuroGuiaOrchestratorV2:
             return False
 
         return all(word in self.FOLLOWUP_ACCEPTANCE_WORDS for word in words)
+
+    def _is_active_profile_identity_question(self, message: str) -> bool:
+        normalized = self._normalize_followup_text(message)
+        if not normalized:
+            return False
+        identity_markers = [
+            "quien soy",
+            "quien estoy usando",
+            "como me llamo",
+            "cual es mi nombre",
+            "cuales mi nombre",
+            "dime mi nombre",
+            "dime quien soy",
+            "que nombre tengo",
+            "sabes mi nombre",
+            "recuerdas mi nombre",
+            "que perfil esta activo",
+            "cual perfil esta activo",
+            "que persona esta activa",
+        ]
+        return any(marker in normalized for marker in identity_markers)
+
+    def _build_profile_identity_process_result(
+        self,
+        message: str,
+        effective_message: str,
+        active_profile: Optional[Dict[str, Any]],
+        unit_context: Dict[str, Any],
+        previous_frame: Dict[str, Any],
+        context_override: Dict[str, Any],
+        support_plan: Dict[str, Any],
+        exceptionality_analysis: Dict[str, Any],
+        user_context_payload: Dict[str, Any],
+        user_context_store_result: Dict[str, Any],
+        conversation_curation_result: Dict[str, Any],
+        session_scope_id: Optional[str],
+        chat_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        if active_profile:
+            alias = active_profile.get("alias") or "este perfil"
+            role = active_profile.get("role") or "persona"
+            age = active_profile.get("age")
+            conditions = active_profile.get("conditions") or []
+            age_part = f", {age} años" if age is not None else ""
+            condition_part = ""
+            if conditions:
+                condition_part = f". También tengo presentes estas características del perfil: {', '.join(map(str, conditions[:3]))}."
+            response_text = (
+                f"En este momento estoy usando el perfil de {alias}, {role}{age_part}. "
+                f"Voy a responder teniendo presente ese contexto, no como una conversación nueva{condition_part}"
+            )
+            effective_family_id = active_profile.get("family_id") or unit_context.get("family_id")
+            effective_profile_id = active_profile.get("profile_id")
+        else:
+            response_text = (
+                "Ahora mismo no tengo un perfil individual activo. "
+                "Selecciona una persona en Perfil y contexto para que pueda recordar su nombre y adaptar mejor la respuesta."
+            )
+            effective_family_id = unit_context.get("family_id")
+            effective_profile_id = None
+
+        category_analysis = {"detected_category": "identidad_perfil", "confidence": 1.0, "source": "active_profile_identity"}
+        state_analysis = {"primary_state": "supportive", "secondary_states": [], "detected_states": [], "followup_needed": False, "source": "active_profile_identity"}
+        intent_analysis = {"detected_intent": "consultar_identidad_contextual", "confidence": 1.0, "source": "active_profile_identity"}
+        conversation_frame = {
+            "source_message": message,
+            "effective_message": effective_message,
+            "conversation_domain": "identidad_perfil",
+            "conversation_phase": "contextual_identity",
+            "context_override": context_override,
+            "active_profile_alias": active_profile.get("alias") if active_profile else None,
+            "session_scope_id": session_scope_id,
+        }
+        conversation_control = {
+            "response_source": "active_profile_identity",
+            "llm_writer_requested": False,
+            "llm_writer_used": False,
+            "llm_provider": None,
+            "llm_block_reason": "direct_context_answer",
+            "llm_curator_status": "not_required",
+            "model_used": None,
+        }
+        response_package = {
+            "mode": "system_generated",
+            "response": response_text,
+            "text": response_text,
+            "response_source": "active_profile_identity",
+            "response_metadata": {
+                "source": "active_profile_identity",
+                "response_source": "active_profile_identity",
+                "detected_category": "identidad_perfil",
+                "primary_state": "supportive",
+                "route_id": "identidad_perfil",
+                "support_mode": "supportive",
+                "active_profile_alias": active_profile.get("alias") if active_profile else None,
+            },
+        }
+
+        return {
+            "case_id": None,
+            "stored_response_id": None,
+            "curated_llm_response_id": None,
+            "learning_payload": None,
+            "learning_store_result": None,
+            "family_id": effective_family_id,
+            "profile_id": effective_profile_id,
+            "unit_context": unit_context,
+            "active_profile": active_profile,
+            "exceptionality_analysis": exceptionality_analysis,
+            "support_plan": support_plan,
+            "conversation_control": conversation_control,
+            "conversation_frame": conversation_frame,
+            "conversational_intent": intent_analysis,
+            "expert_adaptation_plan": {},
+            "state_analysis": state_analysis,
+            "category_analysis": category_analysis,
+            "intent_analysis": intent_analysis,
+            "detected_category": "identidad_perfil",
+            "emotional_state": "supportive",
+            "memory_summary": {},
+            "memory_payload": {},
+            "user_context_payload": user_context_payload,
+            "user_context_store_result": user_context_store_result,
+            "response_memory_payload": {},
+            "stage_result": {},
+            "stage_hints": {},
+            "routine_payload": {},
+            "confidence_payload": {"overall_confidence": 1.0, "source": "active_profile_identity"},
+            "decision_payload": {"decision_mode": "active_profile_identity"},
+            "fallback_payload": {"use_llm": False, "fallback_reason": "direct_context_answer"},
+            "llm_policy": {"should_use_llm": False, "reason": "direct_context_answer"},
+            "llm_request_payload": None,
+            "llm_result": None,
+            "llm_curated_payload": None,
+            "conversation_curation_result": conversation_curation_result,
+            "session_scope_id": session_scope_id,
+            "response_package": response_package,
+            "previous_frame": previous_frame,
+        }
 
     def _empty_exceptionality_analysis(self) -> Dict[str, Any]:
         return {
