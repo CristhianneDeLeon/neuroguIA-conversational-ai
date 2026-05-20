@@ -28,6 +28,7 @@ class ResponseMemory:
     ) -> None:
         self.db = NeuroGuiaDB(db_path=db_path, backend=backend, env_path=env_path)
         self.backend_name = getattr(self.db, "backend_name", "sqlite")
+        self.table_name = "ng_response_memory" if self.backend_name == "postgres" else "response_memory"
 
     # =========================================================
     # HELPERS
@@ -140,8 +141,8 @@ class ResponseMemory:
         }
 
         self.db.execute(
-            """
-            INSERT INTO response_memory (
+            f"""
+            INSERT INTO {self.table_name} (
                 response_id,
                 response_text,
                 source_type,
@@ -301,7 +302,7 @@ class ResponseMemory:
         conditions_signature = conditions_signature or []
 
         rows = self._fetch_all(
-            "SELECT * FROM response_memory WHERE is_active = ?",
+            f"SELECT * FROM {self.table_name} WHERE is_active = ?",
             (self._bool_db(True),),
         )
 
@@ -417,7 +418,7 @@ class ResponseMemory:
         notes: Optional[str] = None,
     ) -> bool:
         row = self._fetch_one(
-            "SELECT * FROM response_memory WHERE response_id = ?",
+            f"SELECT * FROM {self.table_name} WHERE response_id = ?",
             (response_id,),
         )
         if not row:
@@ -442,8 +443,8 @@ class ResponseMemory:
             current_structure["latest_feedback_note"] = notes
 
         self.db.execute(
-            """
-            UPDATE response_memory
+            f"""
+            UPDATE {self.table_name}
             SET usage_count = ?,
                 success_count = ?,
                 failure_count = ?,
@@ -485,7 +486,7 @@ class ResponseMemory:
     # =========================================================
     def get_response_by_id(self, response_id: str) -> Optional[Dict[str, Any]]:
         row = self._fetch_one(
-            "SELECT * FROM response_memory WHERE response_id = ?",
+            f"SELECT * FROM {self.table_name} WHERE response_id = ?",
             (response_id,),
         )
         if not row:
@@ -499,12 +500,12 @@ class ResponseMemory:
     ) -> List[Dict[str, Any]]:
         if only_active:
             rows = self._fetch_all(
-                "SELECT * FROM response_memory WHERE is_active = ? ORDER BY created_at DESC LIMIT ?",
+                f"SELECT * FROM {self.table_name} WHERE is_active = ? ORDER BY created_at DESC LIMIT ?",
                 (self._bool_db(True), limit),
             )
         else:
             rows = self._fetch_all(
-                "SELECT * FROM response_memory ORDER BY created_at DESC LIMIT ?",
+                f"SELECT * FROM {self.table_name} ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             )
         return [self._normalize_row(r) for r in rows]
@@ -514,8 +515,8 @@ class ResponseMemory:
     # =========================================================
     def deactivate_response(self, response_id: str) -> bool:
         self.db.execute(
-            """
-            UPDATE response_memory
+            f"""
+            UPDATE {self.table_name}
             SET is_active = ?, updated_at = ?
             WHERE response_id = ?
             """,

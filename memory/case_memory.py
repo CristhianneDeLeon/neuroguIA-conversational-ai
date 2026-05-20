@@ -350,7 +350,7 @@ class CaseMemory:
         context_key: str,
     ) -> Optional[Dict[str, Any]]:
         rows = self.db.execute(
-            "SELECT * FROM ng_learned_patterns WHERE context_key = ?",
+            "SELECT * FROM learned_patterns WHERE context_key = ?",
             (context_key,),
             fetch=True,
         ) or []
@@ -389,7 +389,7 @@ class CaseMemory:
 
             self.db.execute(
                 """
-                UPDATE ng_learned_patterns
+                UPDATE learned_patterns
                 SET helps = ?, worsens = ?, confidence_level = ?, usage_count = ?, last_seen = ?, updated_at = ?
                 WHERE pattern_id = ?
                 """,
@@ -409,7 +409,7 @@ class CaseMemory:
 
             self.db.execute(
                 """
-                INSERT INTO ng_learned_patterns (
+                INSERT INTO learned_patterns (
                     pattern_id, family_id, profile_id, context_key,
                     helps, worsens, confidence_level, usage_count,
                     last_seen, created_at, updated_at
@@ -432,7 +432,7 @@ class CaseMemory:
 
     def get_patterns_for_profile(self, profile_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         rows = self.db.execute(
-            "SELECT * FROM ng_learned_patterns WHERE profile_id = ? ORDER BY confidence_level DESC, updated_at DESC LIMIT ?",
+            "SELECT * FROM learned_patterns WHERE profile_id = ? ORDER BY confidence_level DESC, updated_at DESC LIMIT ?",
             (profile_id, limit),
             fetch=True,
         ) or []
@@ -440,7 +440,7 @@ class CaseMemory:
 
     def get_patterns_for_family(self, family_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         rows = self.db.execute(
-            "SELECT * FROM ng_learned_patterns WHERE family_id = ? ORDER BY confidence_level DESC, updated_at DESC LIMIT ?",
+            "SELECT * FROM learned_patterns WHERE family_id = ? ORDER BY confidence_level DESC, updated_at DESC LIMIT ?",
             (family_id, limit),
             fetch=True,
         ) or []
