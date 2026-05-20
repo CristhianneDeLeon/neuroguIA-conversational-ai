@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import html
 import os
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 import sys
 import uuid
 from datetime import datetime
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
+from sqlalchemy import create_engine, text
 
 # ---------------------------------------------------------
 # PATH SETUP
@@ -2299,6 +2301,116 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
     }
 
 
+
+
+# ---------------------------------------------------------
+# SUPABASE COMPATIBILITY + MESSAGE LOGGING
+# ---------------------------------------------------------
+@st.cache_resource(show_spinner=False)
+def get_message_db_engine():
+    """Return a reusable SQLAlchemy engine for Supabase/PostgreSQL message logging."""
+    database_url = str(os.getenv("DATABASE_URL", "") or "").strip()
+    if not database_url:
+        return None
+    return create_engine(database_url, pool_pre_ping=True)
+
+
+def _run_postgres_statement(sql: str) -> None:
+    """Execute a PostgreSQL statement only when DATABASE_URL is available."""
+    engine = get_message_db_engine()
+    if engine is None:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(sql))
+
+
+def ensure_supabase_compatibility_views() -> None:
+    """Create bridge views for legacy names used by internal memory modules."""
+    if derive_database_backend() != "postgres":
+        return
+
+    bridge_views = {
+        "response_memory": "ng_response_memory",
+        "user_context_memory": "ng_user_context_memory",
+        "routines": "ng_routines",
+        "learned_patterns": "ng_learned_patterns",
+        "case_memory": "ng_case_memory",
+        "families": "ng_families",
+        "profiles": "ng_profiles",
+    }
+
+    for legacy_name, canonical_name in bridge_views.items():
+        try:
+            _run_postgres_statement(
+                f"""
+                create or replace view public.{legacy_name} as
+                select * from public.{canonical_name};
+                """
+            )
+        except Exception as exc:
+            # No bloqueamos la app: si el puente ya existe como tabla real o
+            # Supabase rechaza DDL temporalmente, el flujo principal puede seguir.
+            st.session_state["supabase_bridge_warning"] = str(exc)
+
+
+def save_message_to_db(
+    session_id: str,
+    user_role: str,
+    message: str,
+    detected_category: Optional[str] = None,
+    emotional_state: Optional[str] = None,
+    profile_id: Optional[str] = None,
+    family_id: Optional[str] = None,
+) -> None:
+    """Persist a user or assistant message in public.ng_messages."""
+    engine = get_message_db_engine()
+    if engine is None:
+        st.session_state["db_message_log_error"] = "DATABASE_URL no está configurada."
+        return
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    insert into public.ng_messages
+                    (
+                        session_id,
+                        user_role,
+                        message,
+                        detected_category,
+                        emotional_state,
+                        profile_id,
+                        family_id
+                    )
+                    values
+                    (
+                        :session_id,
+                        :user_role,
+                        :message,
+                        :detected_category,
+                        :emotional_state,
+                        :profile_id,
+                        :family_id
+                    )
+                    """
+                ),
+                {
+                    "session_id": session_id,
+                    "user_role": user_role,
+                    "message": message,
+                    "detected_category": detected_category,
+                    "emotional_state": emotional_state,
+                    "profile_id": profile_id,
+                    "family_id": family_id,
+                },
+            )
+        st.session_state.pop("db_message_log_error", None)
+    except Exception as exc:
+        st.session_state["db_message_log_error"] = str(exc)
+        raise
+
+
 # ---------------------------------------------------------
 # CHAT ACTION
 # ---------------------------------------------------------
@@ -2425,6 +2537,7 @@ def main() -> None:
     bootstrap_environment(DEFAULT_ENV_PATH)
     init_session_state()
     bootstrap_database(st.session_state.db_backend, st.session_state.db_path)
+    ensure_supabase_compatibility_views()
 
     data = load_units_and_profiles(st.session_state.db_path)
     units = data["units"]
@@ -2446,6 +2559,10 @@ def main() -> None:
     with col_right:
         render_quick_help_sidebar()
         render_response_debug_metadata()
+        if st.session_state.get("db_message_log_error"):
+            st.error(f"Error guardando mensajes: {st.session_state['db_message_log_error']}")
+        if st.session_state.get("supabase_bridge_warning") and env_flag("DEBUG_MODE", False):
+            st.warning(f"Aviso puente Supabase: {st.session_state['supabase_bridge_warning']}")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
