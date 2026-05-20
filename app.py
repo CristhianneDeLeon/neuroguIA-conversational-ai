@@ -1272,8 +1272,8 @@ def render_app_header(show_full_logo: bool = True) -> None:
                     <div class="ng-brand-logo">{logo_html}</div>
                     <p class="ng-brand-title">neuroguIA</p>
                 </div>
-                <p class="ng-header-subtitle">Un espacio de apoyo cálido, claro y adaptativo para acompañarte paso a paso.</p>
-                <p class="ng-header-subtitle">Acompanamiento inteligente y humano para momentos difíciles, organización, prevención y apoyo emocional.</p>
+                <p class="ng-header-subtitle">Un espacio de apoyo calido, claro y adaptativo para acompanarte paso a paso.</p>
+                <p class="ng-header-subtitle">Acompanamiento inteligente y humano para momentos dificiles, organizacion, prevencion y apoyo emocional.</p>
             </div>
         </section>
         """,
@@ -2269,7 +2269,6 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
     return {
         "active_family_id": active_context.get("family_id"),
         "active_profile_id": active_context.get("profile_id"),
-
         "active_profile": {
             "profile_id": profile.get("profile_id"),
             "family_id": profile.get("family_id"),
@@ -2307,7 +2306,6 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
             "executive_profile": profile.get("executive_profile"),
             "evolution_notes": profile.get("evolution_notes"),
         },
-
         "active_unit": {
             "family_id": unit.get("family_id"),
             "unit_type": unit.get("unit_type"),
