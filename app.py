@@ -672,6 +672,34 @@ st.markdown(
     }
 
 
+    
+    .ng-side-card,
+    .ng-quick-card,
+    .ng-panel-secondary {
+        width: 100% !important;
+        padding-left: 1.2rem !important;
+        padding-right: 1.2rem !important;
+    }
+
+    .ng-side-card textarea,
+    .ng-side-card input,
+    .ng-side-card .stSelectbox,
+    .ng-side-card .stTextInput,
+    .ng-side-card .stTextArea {
+        width: 100% !important;
+    }
+
+    .ng-side-card div[data-baseweb="select"] > div,
+    .ng-side-card div[data-baseweb="input"] > div {
+        min-width: 100% !important;
+    }
+
+    .ng-quick-button .stButton > button {
+        min-height: 54px !important;
+        font-size: 0.95rem !important;
+    }
+
+
     @media (max-width: 900px) {
         .block-container {
             padding-left: 0.75rem;
@@ -2181,7 +2209,7 @@ def main() -> None:
     render_app_header(show_full_logo=False)
     user_message = None
     st.markdown('<div class="ng-layout-grid">', unsafe_allow_html=True)
-    col_left, col_center, col_right = st.columns([1.25, 4.2, 1.35], gap="large")
+    col_left, col_center, col_right = st.columns([1.75, 4.0, 1.75], gap="large")
 
     with col_left:
         render_context_sidebar(units, unit_profiles)
