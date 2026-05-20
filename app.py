@@ -2269,12 +2269,30 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
     return {
         "active_family_id": active_context.get("family_id"),
         "active_profile_id": active_context.get("profile_id"),
+
         "active_profile": {
             "profile_id": profile.get("profile_id"),
             "family_id": profile.get("family_id"),
             "alias": profile.get("alias"),
             "age": profile.get("age"),
             "role": profile.get("role"),
+
+            # ---------------------------------------------------------
+            # ADAPTIVE COMMUNICATION CONTEXT
+            # ---------------------------------------------------------
+            "communication_style": (
+                "Habla de forma cálida, sencilla, breve y apropiada para una niña o adolescente. "
+                "Evita lenguaje clínico, adulto o demasiado técnico."
+                if (profile.get("age") or 0) < 18
+                else "Habla de forma empática y clara para una persona adulta."
+            ),
+
+            "developmental_stage": (
+                "niña/adolescente"
+                if (profile.get("age") or 0) < 18
+                else "adulto"
+            ),
+
             "conditions": profile.get("conditions") or [],
             "strengths": profile.get("strengths") or [],
             "triggers": profile.get("triggers") or [],
@@ -2289,6 +2307,7 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
             "executive_profile": profile.get("executive_profile"),
             "evolution_notes": profile.get("evolution_notes"),
         },
+
         "active_unit": {
             "family_id": unit.get("family_id"),
             "unit_type": unit.get("unit_type"),
