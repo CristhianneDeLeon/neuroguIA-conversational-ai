@@ -301,10 +301,50 @@ class ResponseMemory:
         tags = tags or []
         conditions_signature = conditions_signature or []
 
-        rows = self._fetch_all(
-            f"SELECT * FROM {self.table_name} WHERE is_active = ?",
-            (self._bool_db(True),),
-        )
+        # Evita leer toda la tabla en cada turno. Primero traemos solo
+        # candidatos razonables por categoría/intención/estado y dejamos
+        # el ranking fino en Python. Esto baja mucho la latencia en Supabase.
+        query_parts = [f"SELECT * FROM {self.table_name} WHERE is_active = ?"]
+        query_params: List[Any] = [self._bool_db(True)]
+
+        relevance_filters: List[str] = []
+        if detected_category:
+            relevance_filters.append("detected_category = ?")
+            query_params.append(detected_category)
+        if detected_intent:
+            relevance_filters.append("detected_intent = ?")
+            query_params.append(detected_intent)
+        if primary_state:
+            relevance_filters.append("primary_state = ?")
+            query_params.append(primary_state)
+        if profile_id:
+            relevance_filters.append("profile_id = ?")
+            query_params.append(profile_id)
+        if family_id:
+            relevance_filters.append("family_id = ?")
+            query_params.append(family_id)
+
+        if relevance_filters:
+            query_parts.append("AND (" + " OR ".join(relevance_filters) + ")")
+
+        candidate_limit = max(40, min(160, int(limit or 10) * 16))
+        query_parts.append("ORDER BY approved_for_reuse DESC, success_count DESC, usage_count DESC, updated_at DESC LIMIT ?")
+        query_params.append(candidate_limit)
+
+        rows = self._fetch_all(" ".join(query_parts), tuple(query_params))
+
+        # Si los filtros no encuentran nada, hacemos un fallback pequeño, nunca
+        # una lectura completa de la tabla.
+        if not rows:
+            rows = self._fetch_all(
+                f"""
+                SELECT * FROM {self.table_name}
+                WHERE is_active = ?
+                ORDER BY approved_for_reuse DESC, success_count DESC, usage_count DESC, updated_at DESC
+                LIMIT ?
+                """,
+                (self._bool_db(True), candidate_limit),
+            )
 
         scored_candidates: List[Dict[str, Any]] = []
 
