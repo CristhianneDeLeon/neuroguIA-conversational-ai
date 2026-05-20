@@ -654,45 +654,6 @@ st.markdown(
         color: var(--ng-subtext) !important;
     }
 
-    
-    .ng-side-card,
-    .ng-quick-card,
-    .ng-panel-secondary {
-        width: 100% !important;
-        padding-left: 1.2rem !important;
-        padding-right: 1.2rem !important;
-    }
-
-    .ng-side-card textarea,
-    .ng-side-card input,
-    .ng-side-card .stSelectbox,
-    .ng-side-card .stTextInput,
-    .ng-side-card .stTextArea {
-        width: 100% !important;
-    }
-
-    .ng-side-card div[data-baseweb="select"] > div,
-    .ng-side-card div[data-baseweb="input"] > div {
-        min-width: 100% !important;
-    }
-
-    .ng-quick-button .stButton > button {
-        min-height: 54px !important;
-        font-size: 0.95rem !important;
-    }
-
-    .ng-profile-actions-note {
-        margin: 0.48rem 0 0.28rem 0;
-        padding: 0.58rem 0.68rem;
-        border-radius: 14px;
-        background: #fff8f3;
-        border: 1px solid #efe2d6;
-        color: var(--ng-subtext);
-        font-size: 0.82rem;
-        line-height: 1.42;
-    }
-
-
     @media (max-width: 900px) {
         .block-container {
             padding-left: 0.75rem;
@@ -711,6 +672,254 @@ st.markdown(
             max-width: 100%;
         }
     }
+
+    /* =========================================================
+       RESPONSIVE NEUROGUIA - celular, tablet, laptop y PC
+       Mantiene columnas laterales cómodas y evita cajas estrechas.
+       ========================================================= */
+
+    .block-container {
+        width: 100% !important;
+        max-width: 1760px !important;
+        padding-left: clamp(0.65rem, 1.6vw, 1.7rem) !important;
+        padding-right: clamp(0.65rem, 1.6vw, 1.7rem) !important;
+    }
+
+    .ng-page {
+        width: 100% !important;
+        max-width: 1680px !important;
+    }
+
+    .ng-layout-grid {
+        width: 100% !important;
+    }
+
+    .ng-side-card,
+    .ng-quick-card,
+    .ng-panel-secondary {
+        width: 100% !important;
+        min-width: 0 !important;
+        padding-left: 1.25rem !important;
+        padding-right: 1.25rem !important;
+    }
+
+    .ng-side-card textarea,
+    .ng-side-card input,
+    .ng-side-card .stTextArea,
+    .ng-side-card .stTextInput,
+    .ng-side-card .stSelectbox,
+    .ng-quick-card .stButton,
+    .ng-quick-card button {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    .ng-side-card div[data-baseweb="select"],
+    .ng-side-card div[data-baseweb="select"] > div,
+    .ng-side-card div[data-baseweb="input"],
+    .ng-side-card div[data-baseweb="input"] > div,
+    .ng-side-card textarea {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    .ng-side-card div[data-baseweb="select"] span {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        line-height: 1.25 !important;
+    }
+
+    .ng-composer-wrap,
+    .ng-composer-shell,
+    .ng-conversation-card {
+        width: 100% !important;
+    }
+
+    .ng-message {
+        max-width: 94% !important;
+    }
+
+    .ng-quick-button .stButton > button {
+        min-height: 54px !important;
+        font-size: 0.95rem !important;
+        white-space: normal !important;
+        line-height: 1.25 !important;
+    }
+
+    /* PC grande */
+    @media (min-width: 1441px) {
+        .block-container {
+            max-width: 1760px !important;
+        }
+
+        .ng-page {
+            max-width: 1680px !important;
+        }
+
+        .ng-side-card,
+        .ng-quick-card {
+            padding-left: 1.35rem !important;
+            padding-right: 1.35rem !important;
+        }
+    }
+
+    /* Laptop */
+    @media (min-width: 1025px) and (max-width: 1440px) {
+        .block-container {
+            max-width: 1380px !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+
+        .ng-page {
+            max-width: 1340px !important;
+        }
+
+        .ng-side-card,
+        .ng-quick-card {
+            padding-left: 1.05rem !important;
+            padding-right: 1.05rem !important;
+        }
+
+        .ng-sidebar-title,
+        .ng-section-title,
+        .ng-quick-title {
+            font-size: 0.98rem !important;
+        }
+
+        .ng-side-card label,
+        .ng-side-card .stCaption {
+            font-size: 0.83rem !important;
+        }
+    }
+
+    /* Tablet: las columnas de Streamlit se apilan o se vuelven cómodas */
+    @media (min-width: 701px) and (max-width: 1024px) {
+        .block-container {
+            max-width: 980px !important;
+            padding-left: 0.9rem !important;
+            padding-right: 0.9rem !important;
+        }
+
+        .ng-page {
+            max-width: 960px !important;
+        }
+
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+
+        .ng-side-card,
+        .ng-quick-card,
+        .ng-conversation-card,
+        .ng-composer-shell {
+            margin-bottom: 0.85rem !important;
+        }
+
+        .ng-message {
+            max-width: 96% !important;
+        }
+
+        .ng-header-inner {
+            padding: 0.95rem !important;
+        }
+    }
+
+    /* Celular */
+    @media (max-width: 700px) {
+        .block-container {
+            max-width: 100% !important;
+            padding-left: 0.55rem !important;
+            padding-right: 0.55rem !important;
+            padding-top: 0.45rem !important;
+        }
+
+        .ng-page {
+            max-width: 100% !important;
+        }
+
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+
+        .ng-header {
+            padding-bottom: 0.55rem !important;
+        }
+
+        .ng-header-inner {
+            border-radius: 20px !important;
+            padding: 0.8rem 0.72rem !important;
+        }
+
+        .ng-brand-title {
+            font-size: 1.25rem !important;
+        }
+
+        .ng-header-subtitle {
+            font-size: 0.82rem !important;
+            line-height: 1.45 !important;
+        }
+
+        .ng-side-card,
+        .ng-quick-card,
+        .ng-conversation-card,
+        .ng-composer-shell {
+            border-radius: 18px !important;
+            padding: 0.78rem !important;
+            margin-bottom: 0.72rem !important;
+        }
+
+        .ng-message {
+            max-width: 100% !important;
+            font-size: 0.9rem !important;
+            line-height: 1.5 !important;
+            padding: 0.62rem 0.7rem !important;
+        }
+
+        .ng-composer-wrap div[data-baseweb="input"] input {
+            font-size: 0.94rem !important;
+        }
+
+        .ng-composer-wrap div[data-testid="stFormSubmitButton"] button {
+            min-width: 100% !important;
+            min-height: 48px !important;
+        }
+
+        .stButton > button,
+        div[data-testid="stFormSubmitButton"] button,
+        div[data-testid="stDownloadButton"] button {
+            width: 100% !important;
+            min-height: 46px !important;
+            padding: 0.62rem 0.75rem !important;
+            white-space: normal !important;
+        }
+
+        textarea {
+            min-height: 96px !important;
+        }
+
+        .ng-side-card div[data-testid="stExpanderDetails"] {
+            padding: 0.32rem 0.35rem 0.12rem 0.35rem !important;
+        }
+    }
+
+
+    .ng-profile-actions-note {
+        margin: 0.48rem 0 0.28rem 0;
+        padding: 0.58rem 0.68rem;
+        border-radius: 14px;
+        background: #fff8f3;
+        border: 1px solid #efe2d6;
+        color: var(--ng-subtext);
+        font-size: 0.82rem;
+        line-height: 1.42;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1121,30 +1330,9 @@ def render_compact_context_bar(
             unsafe_allow_html=True,
         )
         with st.expander("> Perfil y contexto", expanded=False):
-            render_context_selector(units, unit_profiles, section_key="compact")
-
-            st.markdown(
-                '<p class="ng-profile-actions-note">Activa los formularios solo cuando necesites crear o ampliar el contexto.</p>',
-                unsafe_allow_html=True,
-            )
-
-            show_create_unit = st.toggle(
-                "Crear nuevo caso o familia",
-                value=False,
-                key="show_create_unit_compact",
-                help="Activa esta opción solo cuando quieras registrar un nuevo contexto familiar o individual.",
-            )
-            if show_create_unit:
-                create_unit_ui(st.session_state.db_path, embedded=True)
-
-            show_create_profile = st.toggle(
-                "Crear nuevo perfil individual",
-                value=False,
-                key="show_create_profile_compact",
-                help="Activa esta opción después de seleccionar o crear el caso donde se guardará el perfil.",
-            )
-            if show_create_profile:
-                create_profile_ui(st.session_state.db_path, units, embedded=True)
+            render_context_selector(units, unit_profiles, section_key="main")
+            create_unit_ui(st.session_state.db_path, embedded=True)
+            create_profile_ui(st.session_state.db_path, units, embedded=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
@@ -2246,7 +2434,7 @@ def main() -> None:
     render_app_header(show_full_logo=False)
     user_message = None
     st.markdown('<div class="ng-layout-grid">', unsafe_allow_html=True)
-    col_left, col_center, col_right = st.columns([0.82, 2.58, 0.96], gap="medium")
+    col_left, col_center, col_right = st.columns([1.85, 3.7, 1.85], gap="large")
 
     with col_left:
         render_context_sidebar(units, unit_profiles)
