@@ -2739,6 +2739,38 @@ class NeuroGuiaOrchestratorV2:
             previous_frame=previous_frame,
         )
         effective_message = context_override.get("effective_message") or message
+
+        # -----------------------------------------------------
+        # 1.1) IDENTIDAD CONTEXTUAL ANTES DE RUTAS DE SEGURIDAD
+        # -----------------------------------------------------
+        # Preguntas como "¿quién soy?" o "¿cómo me llamo?" deben responderse
+        # desde el perfil activo antes de que stable_demo/crisis tome prioridad.
+        # La capa de seguridad se mantiene para mensajes de riesgo real, pero
+        # no debe pisar una consulta explícita de identidad contextual.
+        if active_profile:
+            early_exceptionality_analysis = self.exceptionality_mapper.analyze_profile(active_profile)
+            early_support_plan = self.exceptionality_mapper.map_profile_to_support_plan(active_profile)
+        else:
+            early_exceptionality_analysis = self._empty_exceptionality_analysis()
+            early_support_plan = self._empty_support_plan()
+
+        if self._is_active_profile_identity_question(effective_message):
+            return self._build_profile_identity_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                support_plan=early_support_plan,
+                exceptionality_analysis=early_exceptionality_analysis,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
+                chat_history=chat_history,
+            )
+
         conversational_repair = resolve_conversational_repair(
             message=message,
             previous_frame=previous_frame,
@@ -5740,7 +5772,7 @@ class NeuroGuiaOrchestratorV2:
             if conditions:
                 condition_part = f". También tengo presentes estas características del perfil: {', '.join(map(str, conditions[:3]))}."
             response_text = (
-                f"En este momento estoy usando el perfil de {alias}, {role}{age_part}. "
+                f"Sí. En este momento estoy hablando con el perfil de {alias}, {role}{age_part}. "
                 f"Voy a responder teniendo presente ese contexto, no como una conversación nueva{condition_part}"
             )
             effective_family_id = active_profile.get("family_id") or unit_context.get("family_id")
