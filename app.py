@@ -1080,15 +1080,26 @@ def init_session_state() -> None:
 # ---------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------
-@st.cache_data(ttl=90, show_spinner=False)
+@st.cache_data(ttl=180, show_spinner=False)
 def load_units_and_profiles(db_path: str) -> Dict[str, Any]:
     pm = get_profile_manager(db_path)
     try:
-        units = pm.list_units(limit=200)
-        unit_profiles: Dict[str, List[Dict[str, Any]]] = {}
-        for unit in units:
-            family_id = unit["family_id"]
-            unit_profiles[family_id] = pm.list_profiles(family_id=family_id)
+        units = pm.list_units(limit=500)
+        unit_profiles: Dict[str, List[Dict[str, Any]]] = {str(unit.get("family_id")): [] for unit in units if unit.get("family_id")}
+
+        # Carga todos los perfiles en una sola consulta cuando el gestor lo permite.
+        # Si el método no existe, conserva el flujo anterior como respaldo seguro.
+        if hasattr(pm, "list_all_profiles"):
+            all_profiles = pm.list_all_profiles(only_active=True)
+            for profile in all_profiles:
+                family_id = str(profile.get("family_id") or "")
+                if family_id:
+                    unit_profiles.setdefault(family_id, []).append(profile)
+        else:
+            for unit in units:
+                family_id = unit["family_id"]
+                unit_profiles[family_id] = pm.list_profiles(family_id=family_id)
+
         return {
             "units": units,
             "unit_profiles": unit_profiles,
@@ -1113,6 +1124,27 @@ def format_profile_label(profile: Dict[str, Any]) -> str:
     cond_text = ", ".join(conds[:2]) if conds else "sin condiciones"
     age_text = f"{age} años" if age is not None else "edad no indicada"
     return f"{alias} · {role} · {age_text} · {cond_text}"
+
+
+def _context_search_key(value: Any) -> str:
+    text_value = str(value or "").strip().lower()
+    replacements = {
+        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+        "à": "a", "è": "e", "ì": "i", "ò": "o", "ù": "u",
+        "ä": "a", "ë": "e", "ï": "i", "ö": "o", "ü": "u",
+        "ñ": "n",
+    }
+    for source, target in replacements.items():
+        text_value = text_value.replace(source, target)
+    return " ".join(text_value.split())
+
+
+def _matches_context_search(label: str, query: str) -> bool:
+    normalized_query = _context_search_key(query)
+    if not normalized_query:
+        return True
+    normalized_label = _context_search_key(label)
+    return all(part in normalized_label for part in normalized_query.split())
 
 
 def _split_csv(text: str) -> List[str]:
@@ -1877,7 +1909,28 @@ def render_context_selector(
         st.markdown('</div></div>', unsafe_allow_html=True)
         return
 
-    unit_labels = {format_unit_label(u): u["family_id"] for u in units}
+    case_query = st.text_input(
+        "Buscar caso o familia",
+        value="",
+        placeholder="Escribe parte del caso, cuidador o ID...",
+        key=f"case_search_{section_key}",
+    )
+
+    all_unit_labels = {format_unit_label(u): u["family_id"] for u in units}
+    filtered_unit_labels = {
+        label: fid
+        for label, fid in all_unit_labels.items()
+        if _matches_context_search(label, case_query)
+    }
+
+    # Si ya hay un caso seleccionado, lo mantenemos visible aunque el filtro cambie.
+    if st.session_state.selected_family_id:
+        for label, fid in all_unit_labels.items():
+            if fid == st.session_state.selected_family_id:
+                filtered_unit_labels.setdefault(label, fid)
+                break
+
+    unit_labels = filtered_unit_labels
     unit_options = ["—"] + list(unit_labels.keys())
 
     current_unit_label = "—"
@@ -1905,7 +1958,27 @@ def render_context_selector(
         selected_profiles = unit_profiles.get(st.session_state.selected_family_id, [])
 
     if selected_profiles:
-        profile_labels = {format_profile_label(p): p["profile_id"] for p in selected_profiles}
+        profile_query = st.text_input(
+            "Buscar persona dentro del caso",
+            value="",
+            placeholder="Escribe parte del nombre, rol o condición...",
+            key=f"profile_search_{section_key}",
+        )
+
+        all_profile_labels = {format_profile_label(p): p["profile_id"] for p in selected_profiles}
+        filtered_profile_labels = {
+            label: pid
+            for label, pid in all_profile_labels.items()
+            if _matches_context_search(label, profile_query)
+        }
+
+        if st.session_state.selected_profile_id:
+            for label, pid in all_profile_labels.items():
+                if pid == st.session_state.selected_profile_id:
+                    filtered_profile_labels.setdefault(label, pid)
+                    break
+
+        profile_labels = filtered_profile_labels
         profile_options = ["—"] + list(profile_labels.keys())
 
         current_profile_label = "—"
@@ -2394,6 +2467,9 @@ def ensure_supabase_compatibility_views() -> None:
         "create index if not exists idx_ng_case_memory_profile_created on public.ng_case_memory (profile_id, created_at desc);",
         "create index if not exists idx_ng_case_memory_family_created on public.ng_case_memory (family_id, created_at desc);",
         "create index if not exists idx_ng_response_memory_lookup on public.ng_response_memory (is_active, detected_category, detected_intent, primary_state);",
+        "create index if not exists idx_ng_families_alias_order on public.ng_families (lower(coalesce(caregiver_alias, '')));",
+        "create index if not exists idx_ng_profiles_family_alias_order on public.ng_profiles (family_id, lower(coalesce(alias, '')));",
+        "create index if not exists idx_ng_profiles_active_family on public.ng_profiles (is_active, family_id);",
     ]
     for statement in index_statements:
         try:
