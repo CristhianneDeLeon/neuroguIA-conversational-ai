@@ -69,13 +69,10 @@ class DatabaseConfig:
     @classmethod
     def from_env(cls, env_path: str = ".env") -> "DatabaseConfig":
         load_env_file(env_path)
-        raw_backend = os.getenv("DB_BACKEND")
-        database_url = os.getenv("DATABASE_URL")
-        backend = raw_backend.strip().lower() if raw_backend else ("postgres" if database_url else "sqlite")
         return cls(
-            backend=backend,
+            backend=os.getenv("DB_BACKEND", "sqlite").strip().lower(),
             sqlite_db_path=os.getenv("SQLITE_DB_PATH", "neuroguia.db"),
-            database_url=database_url,
+            database_url=os.getenv("DATABASE_URL"),
             postgres_host=os.getenv("POSTGRES_HOST"),
             postgres_port=int(os.getenv("POSTGRES_PORT", "5432")),
             postgres_db=os.getenv("POSTGRES_DB", "postgres"),
