@@ -88,13 +88,13 @@ st.markdown(
     }
 
     .block-container {
-        max-width: 1680px;
+        max-width: 1240px;
         padding-top: 0.9rem;
         padding-bottom: 1.85rem;
     }
 
     .ng-page {
-        max-width: 1600px;
+        max-width: 1160px;
         margin: 0 auto;
     }
 
@@ -183,7 +183,7 @@ st.markdown(
     }
 
     .ng-header-inner {
-        max-width: 1400px;
+        max-width: 920px;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
@@ -258,7 +258,7 @@ st.markdown(
     .ng-header-line {
         margin: 0;
         color: var(--ng-subtext);
-        max-width: 1200px;
+        max-width: 760px;
         font-size: 0.92rem;
         line-height: 1.6;
     }
@@ -419,7 +419,7 @@ st.markdown(
     }
 
     .ng-message {
-        max-width: 92%;
+        max-width: 80%;
         border-radius: 19px;
         padding: 0.7rem 0.86rem;
         margin-bottom: 0.42rem;
@@ -655,24 +655,6 @@ st.markdown(
     }
 
     
-    .ng-side-card {
-        min-width: 100% !important;
-    }
-
-    .stSelectbox > div[data-baseweb="select"] {
-        min-width: 100% !important;
-    }
-
-    .stTextInput, .stTextArea {
-        width: 100% !important;
-    }
-
-    .ng-conversation-card {
-        width: 100% !important;
-    }
-
-
-    
     .ng-side-card,
     .ng-quick-card,
     .ng-panel-secondary {
@@ -697,6 +679,17 @@ st.markdown(
     .ng-quick-button .stButton > button {
         min-height: 54px !important;
         font-size: 0.95rem !important;
+    }
+
+    .ng-profile-actions-note {
+        margin: 0.48rem 0 0.28rem 0;
+        padding: 0.58rem 0.68rem;
+        border-radius: 14px;
+        background: #fff8f3;
+        border: 1px solid #efe2d6;
+        color: var(--ng-subtext);
+        font-size: 0.82rem;
+        line-height: 1.42;
     }
 
 
@@ -732,6 +725,8 @@ STREAMLIT_SECRET_ENV_KEYS = (
     "OPENAI_MODEL",
     "OPENAI_TIMEOUT_SECONDS",
     "DEBUG_MODE",
+    "DATABASE_URL",
+    "DB_BACKEND",
 )
 
 
@@ -1060,14 +1055,14 @@ def render_app_header(show_full_logo: bool = True) -> None:
     )
     st.markdown(
         f"""
-        <section class="ng-header" aria-label="Cabecera de neuroguIA">
+        <section class="ng-header" aria-label="Cabecera de neuroGuIA">
             <div class="ng-header-inner">
                 <div class="ng-brand-line">
                     <div class="ng-brand-logo">{logo_html}</div>
                     <p class="ng-brand-title">neuroguIA</p>
                 </div>
-                <p class="ng-header-subtitle">Un espacio de apoyo cálido, claro y adaptativo para acompañarte paso a paso.</p>
-                <p class="ng-header-subtitle">Acompañamiento inteligente y humano para momentos difíciles, organización, prevención y apoyo emocional.</p>
+                <p class="ng-header-subtitle">Un espacio de apoyo calido, claro y adaptativo para acompanarte paso a paso.</p>
+                <p class="ng-header-subtitle">Acompanamiento inteligente y humano para momentos dificiles, organizacion, prevencion y apoyo emocional.</p>
             </div>
         </section>
         """,
@@ -1126,9 +1121,30 @@ def render_compact_context_bar(
             unsafe_allow_html=True,
         )
         with st.expander("> Perfil y contexto", expanded=False):
-            render_context_selector(units, unit_profiles, section_key="main")
-            create_unit_ui(st.session_state.db_path, embedded=True)
-            create_profile_ui(st.session_state.db_path, units, embedded=True)
+            render_context_selector(units, unit_profiles, section_key="compact")
+
+            st.markdown(
+                '<p class="ng-profile-actions-note">Activa los formularios solo cuando necesites crear o ampliar el contexto.</p>',
+                unsafe_allow_html=True,
+            )
+
+            show_create_unit = st.toggle(
+                "Crear nuevo caso o familia",
+                value=False,
+                key="show_create_unit_compact",
+                help="Activa esta opción solo cuando quieras registrar un nuevo contexto familiar o individual.",
+            )
+            if show_create_unit:
+                create_unit_ui(st.session_state.db_path, embedded=True)
+
+            show_create_profile = st.toggle(
+                "Crear nuevo perfil individual",
+                value=False,
+                key="show_create_profile_compact",
+                help="Activa esta opción después de seleccionar o crear el caso donde se guardará el perfil.",
+            )
+            if show_create_profile:
+                create_profile_ui(st.session_state.db_path, units, embedded=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
@@ -1185,8 +1201,29 @@ def render_context_sidebar(
 
     with st.expander("> Perfil y contexto", expanded=False):
         render_context_selector(units, unit_profiles, section_key="main")
-        create_unit_ui(st.session_state.db_path, embedded=True)
-        create_profile_ui(st.session_state.db_path, units, embedded=True)
+
+        st.markdown(
+            '<p class="ng-profile-actions-note">Los formularios de captura permanecen ocultos para mantener limpio el panel. Actívalos solo cuando necesites crear un nuevo caso o perfil.</p>',
+            unsafe_allow_html=True,
+        )
+
+        show_create_unit = st.toggle(
+            "Crear nuevo caso o familia",
+            value=False,
+            key="show_create_unit_main",
+            help="Activa esta opción solo cuando quieras registrar un nuevo contexto familiar o individual.",
+        )
+        if show_create_unit:
+            create_unit_ui(st.session_state.db_path, embedded=True)
+
+        show_create_profile = st.toggle(
+            "Crear nuevo perfil individual",
+            value=False,
+            key="show_create_profile_main",
+            help="Activa esta opción después de seleccionar o crear el caso donde se guardará el perfil.",
+        )
+        if show_create_profile:
+            create_profile_ui(st.session_state.db_path, units, embedded=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
     return
@@ -2209,7 +2246,7 @@ def main() -> None:
     render_app_header(show_full_logo=False)
     user_message = None
     st.markdown('<div class="ng-layout-grid">', unsafe_allow_html=True)
-    col_left, col_center, col_right = st.columns([1.75, 4.0, 1.75], gap="large")
+    col_left, col_center, col_right = st.columns([0.82, 2.58, 0.96], gap="medium")
 
     with col_left:
         render_context_sidebar(units, unit_profiles)
