@@ -1080,6 +1080,7 @@ def init_session_state() -> None:
 # ---------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------
+@st.cache_data(ttl=90, show_spinner=False)
 def load_units_and_profiles(db_path: str) -> Dict[str, Any]:
     pm = get_profile_manager(db_path)
     try:
@@ -2017,6 +2018,10 @@ def create_unit_ui(db_path: str, embedded: bool = False) -> None:
                     )
                     st.session_state.selected_family_id = family_id
                     st.session_state.selected_profile_id = None
+                    try:
+                        load_units_and_profiles.clear()
+                    except Exception:
+                        pass
                     st.success("Caso guardado correctamente. Ahora puedes crear o seleccionar un perfil individual.")
                     st.rerun()
                 finally:
@@ -2206,6 +2211,10 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
                     )
                     st.session_state.selected_family_id = unit_options[unit_label]
                     st.session_state.selected_profile_id = profile_id
+                    try:
+                        load_units_and_profiles.clear()
+                    except Exception:
+                        pass
                     st.success("Perfil guardado correctamente. Ya quedó seleccionado como contexto activo.")
                     st.rerun()
                 finally:
@@ -2348,8 +2357,9 @@ def _run_postgres_statement(sql: str) -> None:
         conn.execute(text(sql))
 
 
+@st.cache_resource(show_spinner=False)
 def ensure_supabase_compatibility_views() -> None:
-    """Create bridge views for legacy names used by internal memory modules."""
+    """Create bridge views and lightweight indexes only once per Streamlit process."""
     if derive_database_backend() != "postgres":
         return
 
@@ -2609,6 +2619,8 @@ def main() -> None:
             st.warning(f"Aviso puente Supabase: {st.session_state['supabase_bridge_warning']}")
         if st.session_state.get("supabase_index_warning") and env_flag("DEBUG_MODE", False):
             st.warning(f"Aviso índices Supabase: {st.session_state['supabase_index_warning']}")
+        if st.session_state.get("supabase_index_warning") and env_flag("DEBUG_MODE", False):
+            st.warning(f"Aviso índices Supabase: {st.session_state['supabase_index_warning']}")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2621,3 +2633,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
