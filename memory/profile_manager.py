@@ -32,6 +32,19 @@ class ProfileManager:
             return ""
         return " ".join(str(value).strip().lower().split())
 
+    def _sort_key_text(self, value: Optional[str]) -> str:
+        """Clave estable para ordenar casos y perfiles por nombre visible."""
+        normalized = self._normalize_text(value)
+        replacements = {
+            "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+            "à": "a", "è": "e", "ì": "i", "ò": "o", "ù": "u",
+            "ä": "a", "ë": "e", "ï": "i", "ö": "o", "ü": "u",
+            "ñ": "n",
+        }
+        for source, target in replacements.items():
+            normalized = normalized.replace(source, target)
+        return normalized
+
     def _to_json(self, value: Any, default: Any = None) -> str:
         if value is None:
             value = [] if default is None else default
@@ -125,11 +138,26 @@ class ProfileManager:
 
     def list_units(self, limit: int = 100) -> List[Dict[str, Any]]:
         rows = self.db.execute(
-            "SELECT * FROM families ORDER BY updated_at DESC LIMIT ?",
+            """
+            SELECT *
+            FROM families
+            ORDER BY lower(coalesce(caregiver_alias, '')) ASC,
+                     lower(coalesce(unit_type, '')) ASC,
+                     updated_at DESC
+            LIMIT ?
+            """,
             (limit,),
             fetch=True,
         ) or []
-        return [self._row_to_unit(r) for r in rows if r]
+        units = [self._row_to_unit(r) for r in rows if r]
+        return sorted(
+            units,
+            key=lambda item: (
+                self._sort_key_text(item.get("caregiver_alias")),
+                self._sort_key_text(item.get("unit_type")),
+                str(item.get("family_id") or ""),
+            ),
+        )
 
     def get_unit(self, family_id: str) -> Optional[Dict[str, Any]]:
         row = self.db.execute(
@@ -252,10 +280,57 @@ class ProfileManager:
             query += " AND is_active = ?"
             params.append(self._bool_to_db(True))
 
-        query += " ORDER BY updated_at DESC"
+        query += """
+        ORDER BY lower(coalesce(alias, '')) ASC,
+                 lower(coalesce(role, '')) ASC,
+                 age ASC,
+                 updated_at DESC
+        """
 
         rows = self.db.execute(query, tuple(params), fetch=True) or []
-        return [self._row_to_profile(r) for r in rows if r]
+        profiles = [self._row_to_profile(r) for r in rows if r]
+        return sorted(
+            profiles,
+            key=lambda item: (
+                self._sort_key_text(item.get("alias")),
+                self._sort_key_text(item.get("role")),
+                item.get("age") if item.get("age") is not None else 999,
+                str(item.get("profile_id") or ""),
+            ),
+        )
+
+    def list_all_profiles(self, only_active: bool = True) -> List[Dict[str, Any]]:
+        """Obtiene todos los perfiles activos en una sola consulta.
+
+        Evita hacer una consulta por cada familia al cargar los selectores
+        de contexto. Esto mejora la velocidad cuando hay muchos casos.
+        """
+        query = "SELECT * FROM profiles"
+        params: List[Any] = []
+
+        if only_active:
+            query += " WHERE is_active = ?"
+            params.append(self._bool_to_db(True))
+
+        query += """
+        ORDER BY family_id ASC,
+                 lower(coalesce(alias, '')) ASC,
+                 lower(coalesce(role, '')) ASC,
+                 age ASC
+        """
+
+        rows = self.db.execute(query, tuple(params), fetch=True) or []
+        profiles = [self._row_to_profile(r) for r in rows if r]
+        return sorted(
+            profiles,
+            key=lambda item: (
+                str(item.get("family_id") or ""),
+                self._sort_key_text(item.get("alias")),
+                self._sort_key_text(item.get("role")),
+                item.get("age") if item.get("age") is not None else 999,
+                str(item.get("profile_id") or ""),
+            ),
+        )
 
     def get_profile(self, profile_id: str) -> Optional[Dict[str, Any]]:
         row = self.db.execute(

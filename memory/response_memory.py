@@ -327,7 +327,7 @@ class ResponseMemory:
         if relevance_filters:
             query_parts.append("AND (" + " OR ".join(relevance_filters) + ")")
 
-        candidate_limit = max(40, min(160, int(limit or 10) * 16))
+        candidate_limit = max(24, min(80, int(limit or 10) * 8))
         query_parts.append("ORDER BY approved_for_reuse DESC, success_count DESC, usage_count DESC, updated_at DESC LIMIT ?")
         query_params.append(candidate_limit)
 
