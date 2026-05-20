@@ -2275,6 +2275,13 @@ def build_profile_context_payload(active_context: Dict[str, Any]) -> Dict[str, A
             "alias": profile.get("alias"),
             "age": profile.get("age"),
             "role": profile.get("role"),
+            "identity_summary": (
+                f"La persona activa es {profile.get('alias') or 'sin nombre'}, "
+                f"{profile.get('role') or 'sin rol'}, "
+                f"{profile.get('age')} años."
+                if profile.get("alias")
+                else None
+            ),
 
             # ---------------------------------------------------------
             # ADAPTIVE COMMUNICATION CONTEXT
@@ -2368,6 +2375,21 @@ def ensure_supabase_compatibility_views() -> None:
             # No bloqueamos la app: si el puente ya existe como tabla real o
             # Supabase rechaza DDL temporalmente, el flujo principal puede seguir.
             st.session_state["supabase_bridge_warning"] = str(exc)
+
+    # Índices ligeros para acelerar lectura contextual y revisión de mensajes.
+    # Se ejecutan con IF NOT EXISTS, por lo que no duplican nada si ya existen.
+    index_statements = [
+        "create index if not exists idx_ng_messages_profile_created on public.ng_messages (profile_id, created_at desc);",
+        "create index if not exists idx_ng_messages_family_created on public.ng_messages (family_id, created_at desc);",
+        "create index if not exists idx_ng_case_memory_profile_created on public.ng_case_memory (profile_id, created_at desc);",
+        "create index if not exists idx_ng_case_memory_family_created on public.ng_case_memory (family_id, created_at desc);",
+        "create index if not exists idx_ng_response_memory_lookup on public.ng_response_memory (is_active, detected_category, detected_intent, primary_state);",
+    ]
+    for statement in index_statements:
+        try:
+            _run_postgres_statement(statement)
+        except Exception as exc:
+            st.session_state["supabase_index_warning"] = str(exc)
 
 
 def save_message_to_db(
@@ -2467,6 +2489,11 @@ def process_user_message(user_message: str) -> None:
                 "profile_context": profile_context_payload,
                 "active_profile": profile_context_payload.get("active_profile", {}),
                 "active_unit": profile_context_payload.get("active_unit", {}),
+                "active_profile_identity_directive": (
+                    "Usa siempre el perfil activo para responder preguntas como 'quién soy', "
+                    "'cómo me llamo' o 'cuál es mi nombre'. No digas que no recuerdas el nombre "
+                    "si active_profile.alias está disponible."
+                ),
             },
             chat_history=build_history_hint(),
             auto_save_case=True,
@@ -2580,6 +2607,8 @@ def main() -> None:
             st.error(f"Error guardando mensajes: {st.session_state['db_message_log_error']}")
         if st.session_state.get("supabase_bridge_warning") and env_flag("DEBUG_MODE", False):
             st.warning(f"Aviso puente Supabase: {st.session_state['supabase_bridge_warning']}")
+        if st.session_state.get("supabase_index_warning") and env_flag("DEBUG_MODE", False):
+            st.warning(f"Aviso índices Supabase: {st.session_state['supabase_index_warning']}")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
