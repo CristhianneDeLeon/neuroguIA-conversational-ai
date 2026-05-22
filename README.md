@@ -224,6 +224,8 @@ M.Sc. Student in Artificial Intelligence
 
 ORCID: https://orcid.org/0009-0007-4777-1741
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20337409.svg)](https://doi.org/10.5281/zenodo.20337409)
+
 ---
 
 ## 📄 License
