@@ -1305,8 +1305,8 @@ def render_app_header(show_full_logo: bool = True) -> None:
                     <div class="ng-brand-logo">{logo_html}</div>
                     <p class="ng-brand-title">neuroguIA</p>
                 </div>
-                <p class="ng-header-subtitle">Un espacio de apoyo calido, claro y adaptativo para acompanarte paso a paso.</p>
-                <p class="ng-header-subtitle">Acompanamiento inteligente y humano para momentos dificiles, organizacion, prevencion y apoyo emocional.</p>
+                <p class="ng-header-subtitle">Un espacio de apoyo cálido, claro y adaptativo para acompañarte paso a paso.</p>
+                <p class="ng-header-subtitle">Acompañamiento inteligente y humano para momentos difíciles, organización, prevención y apoyo emocional.</p>
             </div>
         </section>
         """,
