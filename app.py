@@ -922,6 +922,59 @@ st.markdown(
         line-height: 1.42;
     }
 
+
+    /* Mantener legibilidad de la conversación en dispositivos móviles y temas oscuros */
+    .ng-message,
+    .ng-message-user,
+    .ng-message-assistant,
+    .ng-message div,
+    .ng-message p,
+    .ng-message span:not(.ng-message-role) {
+        color: #2f241f !important;
+        -webkit-text-fill-color: #2f241f !important;
+    }
+
+    .ng-message-role {
+        color: #73655d !important;
+        -webkit-text-fill-color: #73655d !important;
+    }
+
+    .ng-message-user {
+        background: #f8efe8 !important;
+        border-color: #eadfd4 !important;
+    }
+
+    .ng-message-assistant {
+        background: #fffdfb !important;
+        border-color: #eadfd4 !important;
+    }
+
+    .ng-chat-empty,
+    .ng-empty-state {
+        color: #73655d !important;
+        -webkit-text-fill-color: #73655d !important;
+    }
+
+    .ng-footer-disclaimer {
+        margin: 1.1rem auto 0 auto;
+        max-width: 980px;
+        padding: 0.82rem 1rem;
+        border-radius: 18px;
+        background: rgba(255, 253, 251, 0.92);
+        border: 1px solid #eadfd4;
+        color: #73655d !important;
+        -webkit-text-fill-color: #73655d !important;
+        font-size: 0.82rem;
+        line-height: 1.55;
+        text-align: center;
+        box-shadow: 0 10px 24px rgba(110, 71, 53, 0.05);
+    }
+
+    .ng-footer-disclaimer strong {
+        color: #2f241f !important;
+        -webkit-text-fill-color: #2f241f !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2660,6 +2713,18 @@ def process_user_message(user_message: str) -> None:
         safe_close(orch)
 
 
+def render_responsibility_notice() -> None:
+    st.markdown(
+        """
+        <div class="ng-footer-disclaimer">
+            <strong>Aviso:</strong> neuroguIA es una herramienta de apoyo emocional y orientación no clínica. 
+            Sus respuestas no sustituyen la atención médica, psicológica, terapéutica ni de emergencia.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ---------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------
@@ -2704,10 +2769,9 @@ def main() -> None:
         process_user_message(user_message)
         st.rerun()
 
+    render_responsibility_notice()
     render_shell_end()
 
 
 if __name__ == "__main__":
     main()
-
-
