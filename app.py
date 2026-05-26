@@ -2717,8 +2717,8 @@ def render_responsibility_notice() -> None:
     st.markdown(
         """
         <div class="ng-footer-disclaimer">
-            <strong>Aviso:</strong> neuroguIA es una herramienta de apoyo emocional y orientación no clínica. 
-            Sus respuestas no sustituyen la atención médica, psicológica, terapéutica ni de emergencia.
+            <strong>Aviso:</strong> \n neuroguIA es una herramienta de apoyo emocional y orientación no clínica. 
+            \n Sus respuestas no sustituyen la atención médica, psicológica, terapéutica ni de emergencia.
         </div>
         """,
         unsafe_allow_html=True,
