@@ -908,6 +908,14 @@ st.markdown(
         .ng-side-card div[data-testid="stExpanderDetails"] {
             padding: 0.32rem 0.35rem 0.12rem 0.35rem !important;
         }
+
+        .ng-footer-disclaimer {
+            max-width: 92% !important;
+            padding: 0.6rem 0.75rem !important;
+            font-size: 0.72rem !important;
+            line-height: 1.38 !important;
+            border-radius: 14px !important;
+        }
     }
 
 
@@ -956,18 +964,18 @@ st.markdown(
     }
 
     .ng-footer-disclaimer {
-        margin: 1.1rem auto 0 auto;
-        max-width: 980px;
-        padding: 0.82rem 1rem;
-        border-radius: 18px;
+        margin: 0.8rem auto 0 auto;
+        max-width: 760px;
+        padding: 0.65rem 0.9rem;
+        border-radius: 16px;
         background: rgba(255, 253, 251, 0.92);
         border: 1px solid #eadfd4;
         color: #73655d !important;
         -webkit-text-fill-color: #73655d !important;
-        font-size: 0.82rem;
-        line-height: 1.55;
+        font-size: 0.78rem;
+        line-height: 1.45;
         text-align: center;
-        box-shadow: 0 10px 24px rgba(110, 71, 53, 0.05);
+        box-shadow: 0 8px 18px rgba(110, 71, 53, 0.04);
     }
 
     .ng-footer-disclaimer strong {
