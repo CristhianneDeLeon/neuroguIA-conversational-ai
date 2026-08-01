@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+title: neuroguIA Research Dashboard
+authors:
+  - family-names: De León
+    given-names: Cristhianne
+    orcid: https://orcid.org/0009-0007-4777-1741
+year: 2026
+message: Cite this dashboard and associated dataset when using it for academic work.
