@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import base64
@@ -983,6 +983,43 @@ st.markdown(
         -webkit-text-fill-color: #2f241f !important;
     }
 
+    .ng-dashboard-access {
+        margin-top: 0.9rem;
+        padding: 0.92rem;
+        border-radius: 20px;
+        background: linear-gradient(145deg, #fffdfb 0%, #f8eee8 100%);
+        border: 1px solid #eadfd4;
+        box-shadow: 0 10px 24px rgba(110, 71, 53, 0.06);
+    }
+
+    .ng-dashboard-access-title {
+        margin: 0;
+        color: #2f241f;
+        font-size: 0.96rem;
+        font-weight: 800;
+        line-height: 1.3;
+    }
+
+    .ng-dashboard-access-copy {
+        margin: 0.28rem 0 0.7rem 0;
+        color: #73655d;
+        font-size: 0.80rem;
+        line-height: 1.45;
+    }
+
+    div[data-testid="stLinkButton"] > a {
+        border-radius: 14px !important;
+        border: 1px solid #b86e54 !important;
+        background: #b86e54 !important;
+        color: #ffffff !important;
+        font-weight: 750 !important;
+    }
+
+    div[data-testid="stLinkButton"] > a:hover {
+        background: #9f5c46 !important;
+        border-color: #9f5c46 !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -999,6 +1036,7 @@ STREAMLIT_SECRET_ENV_KEYS = (
     "DEBUG_MODE",
     "DATABASE_URL",
     "DB_BACKEND",
+    "DASHBOARD_URL",
 )
 
 
@@ -1019,7 +1057,7 @@ def _get_streamlit_secret_value(key: str) -> Optional[Any]:
         key.lower(),
         key.replace("OPENAI_", "").lower(),
     }
-    for section_name in ("openai", "OPENAI", "llm", "LLM", "debug", "DEBUG"):
+    for section_name in ("openai", "OPENAI", "llm", "LLM", "debug", "DEBUG", "dashboard", "DASHBOARD"):
         try:
             section = secrets.get(section_name)
         except Exception:
@@ -1064,6 +1102,17 @@ def env_flag(name: str, default: bool = False) -> bool:
     if not raw_value:
         return default
     return raw_value in {"1", "true", "yes", "y", "on", "si", "sí", "enabled"}
+
+
+def get_dashboard_url() -> str:
+    """Obtiene la URL pública del dashboard sin escribirla en el código fuente."""
+    value = str(os.getenv("DASHBOARD_URL", "") or "").strip()
+    if not value:
+        secret_value = _get_streamlit_secret_value("DASHBOARD_URL")
+        value = str(secret_value or "").strip()
+    if value and not value.lower().startswith(("http://", "https://")):
+        return ""
+    return value
 
 
 def derive_database_backend(default: str = "sqlite") -> str:
@@ -1908,6 +1957,36 @@ def render_quick_help_sidebar() -> None:
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div></div>', unsafe_allow_html=True)
+
+def render_dashboard_access() -> None:
+    """Muestra el acceso al panel científico sin exponer credenciales."""
+    dashboard_url = get_dashboard_url()
+    st.markdown(
+        """
+        <div class="ng-dashboard-access">
+            <p class="ng-dashboard-access-title">📊 Dashboard de investigación</p>
+            <p class="ng-dashboard-access-copy">Consulta los resultados consolidados del estudio, las métricas de uso y las vistas analíticas del Capítulo 6.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if dashboard_url:
+        st.link_button(
+            "Abrir dashboard",
+            dashboard_url,
+            use_container_width=True,
+            help="Abre el panel científico de neuroguIA en una nueva pestaña.",
+        )
+    else:
+        st.button(
+            "Dashboard pendiente de publicar",
+            disabled=True,
+            use_container_width=True,
+            help="Configura DASHBOARD_URL en los secretos de Streamlit cuando el dashboard tenga una URL pública.",
+        )
+        if env_flag("DEBUG_MODE", False):
+            st.caption("Configura DASHBOARD_URL en .streamlit/secrets.toml o en Streamlit Community Cloud.")
+
 
 def render_response_debug_metadata() -> None:
     result = st.session_state.last_result if isinstance(st.session_state.last_result, dict) else {}
@@ -2761,6 +2840,7 @@ def main() -> None:
 
     with col_right:
         render_quick_help_sidebar()
+        render_dashboard_access()
         render_response_debug_metadata()
         if st.session_state.get("db_message_log_error"):
             st.error(f"Error guardando mensajes: {st.session_state['db_message_log_error']}")
