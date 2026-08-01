@@ -1,0 +1,52 @@
+﻿# ==========================================================
+# neuroguIA — archivos locales y sensibles
+# ==========================================================
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Credenciales y secretos
+**/secrets.toml
+**/.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+# Registros de ejecución
+*.log
+logs_dashboard/
+
+# Respaldos locales
+*_ANTES_*.py
+RESPALDO_*/
+respaldos/
+backups/
+
+# Resultados generados localmente
+dashboard/outputs/*
+!dashboard/outputs/.gitkeep
+
+# Sistema operativo
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editores
+.vscode/
+.idea/
+
+# Respaldos temporales adicionales
+*.bak
