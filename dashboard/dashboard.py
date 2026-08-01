@@ -450,7 +450,7 @@ def prepare_audit_display(df: pd.DataFrame) -> pd.DataFrame:
     if df is None:
         return pd.DataFrame()
 
-    out = df.copy()
+    out = df.copy().astype("object")
 
     if "status" in out.columns:
         out["status"] = out["status"].replace(
