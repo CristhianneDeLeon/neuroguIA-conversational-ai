@@ -542,7 +542,7 @@ st.markdown(
     }
 
     .ng-quick-subtitle {
-        margin: 0.28rem 0 0.76rem 0;
+        margin: 0.28rem 0 0.35rem 0;
         color: var(--ng-subtext);
         font-size: 0.86rem;
         line-height: 1.48;
@@ -551,7 +551,7 @@ st.markdown(
 
     .ng-quick-button {
         height: 100%;
-        margin-top: 0.42rem;
+        margin-top: 0.12rem;
     }
 
     .ng-quick-button .stButton {
