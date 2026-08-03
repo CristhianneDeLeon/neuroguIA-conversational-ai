@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import base64
@@ -25,7 +25,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from database import initialize_database, load_env_file
 from core.orchestrator_v2 import NeuroGuiaOrchestratorV2
+from core.routine_response_guard import RoutineResponseGuard
 from memory.profile_manager import ProfileManager
+
+
+ROUTINE_RESPONSE_GUARD = RoutineResponseGuard()
 
 
 # ---------------------------------------------------------
@@ -2694,6 +2698,22 @@ def process_user_message(user_message: str) -> None:
                 persistence_enabled and st.session_state.auto_store_curated_llm_response
             ),
             use_llm_stub=st.session_state.use_llm_stub,
+        )
+
+        # Capa final de entrega: si una rutina fue solicitada pero una ruta
+        # determinista del orquestador no la incorporó al texto, se construye
+        # y adjunta antes de mostrar la respuesta.
+        result = ROUTINE_RESPONSE_GUARD.ensure(
+            message=user_message,
+            result=result,
+            previous_frame=previous_conversation_frame,
+            active_profile=profile_context_payload.get("active_profile", {}) or active_profile,
+            extra_context={
+                "session_scope_id": st.session_state.session_scope_id,
+                "selected_family_id": active_family_id,
+                "selected_profile_id": active_profile_id,
+            },
+            chat_history=list(st.session_state.chat_history),
         )
 
         response_package = result.get("response_package", {}) or {}
