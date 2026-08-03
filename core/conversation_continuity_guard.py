@@ -122,7 +122,55 @@ class ConversationContinuityGuard:
             },
             "must_preserve": self._must_preserve(output),
         }
-        llm_result = self.llm_gateway.rewrite_conversational_followup(writer_plan)
+        writer = getattr(
+            self.llm_gateway,
+            "rewrite_conversational_followup",
+            None,
+        )
+        if not callable(writer):
+            metadata = dict(response_package.get("response_metadata") or {})
+            metadata.update(
+                {
+                    "conversation_continuity_guard": True,
+                    "conversation_writer_used": False,
+                    "conversation_writer_reason": "gateway_method_missing",
+                }
+            )
+            response_package["response_metadata"] = metadata
+            output["response_package"] = response_package
+            output["conversation_writer_result"] = {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "local",
+                "model": None,
+                "fallback_reason": "gateway_method_missing",
+            }
+            return output
+
+        try:
+            llm_result = writer(writer_plan)
+        except Exception as exc:
+            metadata = dict(response_package.get("response_metadata") or {})
+            metadata.update(
+                {
+                    "conversation_continuity_guard": True,
+                    "conversation_writer_used": False,
+                    "conversation_writer_reason": (
+                        f"writer_exception:{type(exc).__name__}"
+                    ),
+                }
+            )
+            response_package["response_metadata"] = metadata
+            output["response_package"] = response_package
+            output["conversation_writer_result"] = {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "openai",
+                "model": None,
+                "fallback_reason": f"writer_exception:{type(exc).__name__}",
+            }
+            return output
+
         rewritten = str((llm_result or {}).get("response_text") or "").strip()
 
         if bool((llm_result or {}).get("used_llm")) and rewritten:
