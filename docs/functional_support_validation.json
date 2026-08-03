@@ -1,0 +1,102 @@
+[
+  {
+    "id": "F01",
+    "message": "Estoy muy ansiosa y no sé cómo calmarme",
+    "expected_category": "regulacion_emocional",
+    "detected_category": "regulacion_emocional",
+    "expected_routine": "emotional_landing",
+    "generated_routine": "emotional_landing",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "F02",
+    "message": "Mi hijo no puede empezar la tarea de la escuela",
+    "expected_category": "acompanamiento_escolar",
+    "detected_category": "acompanamiento_escolar",
+    "expected_routine": "school_support",
+    "generated_routine": "school_support",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "F03",
+    "message": "En casa nadie sabe qué responsabilidad le toca",
+    "expected_category": "organizacion_familiar",
+    "detected_category": "organizacion_familiar",
+    "expected_routine": "family_organization",
+    "generated_routine": "family_organization",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "F04",
+    "message": "El ruido y las luces le provocan sobrecarga sensorial",
+    "expected_category": "regulacion_sensorial",
+    "detected_category": "regulacion_sensorial",
+    "expected_routine": "sensory_regulation",
+    "generated_routine": "sensory_regulation",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "F05",
+    "message": "Estoy agotada de cuidar y todo recae en mí",
+    "expected_category": "bienestar_cuidador",
+    "detected_category": "bienestar_cuidador",
+    "expected_routine": "caregiver_recovery",
+    "generated_routine": "caregiver_recovery",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "F06",
+    "message": "Está en crisis y se puede lastimar",
+    "expected_category": "manejo_crisis",
+    "detected_category": "manejo_crisis",
+    "expected_routine": "crisis_safety",
+    "generated_routine": "crisis_safety",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "F07",
+    "message": "Necesito una rutina para organizar las mañanas",
+    "expected_category": "rutinas_habitos",
+    "detected_category": "rutinas_habitos",
+    "expected_routine": "daily_habits",
+    "generated_routine": "daily_habits",
+    "routine_visible": true,
+    "passed": true
+  },
+  {
+    "id": "N01",
+    "message": "No quiero una rutina, solo quiero hablar un momento",
+    "expected_category": "cualquier categoría compatible",
+    "detected_category": "rutinas_habitos",
+    "expected_routine": null,
+    "generated_routine": null,
+    "routine_visible": false,
+    "passed": true
+  },
+  {
+    "id": "N02",
+    "message": "Seguimiento consecutivo de la misma necesidad",
+    "expected_category": "rutinas_habitos",
+    "detected_category": "rutinas_habitos",
+    "expected_routine": "no repetir la rutina anterior",
+    "generated_routine": null,
+    "routine_visible": false,
+    "passed": true
+  },
+  {
+    "id": "N03",
+    "message": "Seguimiento con crisis activa",
+    "expected_category": "manejo_crisis",
+    "detected_category": "manejo_crisis",
+    "expected_routine": "crisis_safety",
+    "generated_routine": "crisis_safety",
+    "routine_visible": true,
+    "passed": true
+  }
+]
