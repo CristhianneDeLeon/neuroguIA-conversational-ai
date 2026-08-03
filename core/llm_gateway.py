@@ -259,6 +259,102 @@ class LLMGateway:
             "has_api_key": has_api_key,
         }
 
+    def rewrite_conversational_followup(self, plan: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Redacta un seguimiento coherente sin cambiar decisiones estructuradas.
+
+        La API se usa como capa de lenguaje. Categoría, seguridad, rutina y
+        restricciones permanecen determinadas por neuroguIA.
+        """
+        plan = dict(plan or {})
+        request_payload = {
+            "prompt_mode": "conversation_continuity_writer",
+            "message": str(plan.get("message") or "").strip(),
+            "plan": plan,
+        }
+        if not plan:
+            return {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "local",
+                "model": None,
+                "fallback_reason": "empty_continuity_plan",
+            }
+        if not self._is_openai_llm_enabled():
+            return {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "local",
+                "model": self._get_openai_model(),
+                "fallback_reason": "llm_disabled_by_env",
+            }
+
+        client, client_error = self._get_openai_client()
+        if client is None:
+            return {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "openai",
+                "model": self._get_openai_model(),
+                "fallback_reason": client_error or "openai_client_unavailable",
+            }
+
+        instructions = """Eres la capa de redacción conversacional de neuroguIA.
+Responde al último mensaje como continuación directa de la conversación.
+No reinicies el tema, no ignores una precisión del usuario y no repitas una
+plantilla emocional genérica si la persona está contestando una pregunta.
+La lógica estructurada del sistema ya decidió categoría, seguridad y rutina.
+No cambies esos datos. Si hay una rutina en must_preserve o base_response,
+conserva sus pasos y su sentido. Puedes mejorar la transición y el lenguaje.
+No diagnostiques, no prescribas medicamentos y no digas que eres un modelo.
+Si la persona pide dos versiones, responde a ambas. Usa español natural,
+cálido y concreto. Devuelve únicamente la respuesta final visible."""
+
+        input_payload = {
+            "recent_turns": plan.get("recent_turns") or [],
+            "current_message": plan.get("message") or "",
+            "base_response": plan.get("base_response") or "",
+            "pending_context": plan.get("pending_context") or {},
+            "conversation_frame": plan.get("conversation_frame") or {},
+            "conversation_control": plan.get("conversation_control") or {},
+            "functional_analysis": plan.get("functional_analysis") or {},
+            "routine_payload": plan.get("routine_payload") or {},
+            "active_profile": plan.get("active_profile") or {},
+            "must_preserve": plan.get("must_preserve") or {},
+        }
+
+        try:
+            response = client.responses.create(
+                model=self._get_openai_model(),
+                instructions=instructions,
+                input=json.dumps(input_payload, ensure_ascii=False, indent=2),
+                max_output_tokens=520,
+            )
+        except Exception as exc:
+            return {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "openai",
+                "model": self._get_openai_model(),
+                "fallback_reason": f"openai_request_failed:{type(exc).__name__}",
+            }
+
+        response_text = self._extract_openai_response_text(response)
+        if not response_text:
+            return {
+                "response_text": "",
+                "used_llm": False,
+                "provider": "openai",
+                "model": self._get_openai_model(),
+                "fallback_reason": "empty_openai_response",
+            }
+        return {
+            "response_text": response_text,
+            "used_llm": True,
+            "provider": "openai",
+            "model": self._get_openai_model(),
+            "fallback_reason": None,
+        }
+
     def rewrite_from_behavioral_plan(self, plan: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         plan = dict(plan or {})
         request_payload = {
