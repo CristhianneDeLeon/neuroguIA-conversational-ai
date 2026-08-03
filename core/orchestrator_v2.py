@@ -12,7 +12,9 @@ from core.confidence_engine import ConfidenceEngine
 from core.fallback_manager import FallbackManager
 from core.response_builder import ResponseBuilder
 from core.response_curator import ResponseCurator
-from core.routine_builder import RoutineBuilder
+from core.routine_builder_v2 import RoutineBuilderV2 as RoutineBuilder, attach_routine_to_response
+from core.functional_category_router import FunctionalCategoryRouter
+from core.routine_activation_engine import RoutineActivationEngine
 from core.conversation_stages import ConversationStages
 from core.conversational_intent import ConversationalIntentBuilder
 from core.conversational_repair_engine import resolve_conversational_repair
@@ -2640,6 +2642,8 @@ class NeuroGuiaOrchestratorV2:
         self.decision_engine = DecisionEngine()
         self.fallback_manager = FallbackManager()
         self.routine_builder = RoutineBuilder()
+        self.functional_category_router = FunctionalCategoryRouter()
+        self.routine_activation_engine = RoutineActivationEngine()
         self.response_builder = ResponseBuilder()
         self.response_curator = ResponseCurator()
         self.support_flow_engine = SupportFlowEngine()
@@ -2905,6 +2909,23 @@ class NeuroGuiaOrchestratorV2:
             profile=active_profile,
         )
 
+        functional_analysis = self.functional_category_router.route(
+            message=effective_message,
+            technical_category=category_analysis.get("detected_category"),
+            primary_state=state_analysis.get("primary_state"),
+            conversation_domain=category_analysis.get("detected_category"),
+            profile=active_profile,
+            previous_frame=previous_frame,
+        )
+        category_analysis.update(
+            {
+                "functional_category": functional_analysis.get("functional_category"),
+                "functional_category_label": functional_analysis.get("functional_category_label"),
+                "functional_category_purpose": functional_analysis.get("functional_category_purpose"),
+                "functional_category_confidence": functional_analysis.get("confidence"),
+            }
+        )
+
         conversation_control = self._build_conversation_control(
             source_message=message,
             effective_message=effective_message,
@@ -2936,6 +2957,10 @@ class NeuroGuiaOrchestratorV2:
             extra_context=extra_context,
             conversation_control=conversation_control,
         )
+
+        conversation_frame["functional_category"] = functional_analysis.get("functional_category")
+        conversation_frame["functional_category_label"] = functional_analysis.get("functional_category_label")
+        conversation_frame["functional_category_purpose"] = functional_analysis.get("functional_category_purpose")
 
         flow_result = self.support_flow_engine.resolve_turn(
             source_message=message,
@@ -2999,6 +3024,8 @@ class NeuroGuiaOrchestratorV2:
             "is_followup_acceptance": conversation_control.get("turn_type") == "followup_acceptance",
             "context_override": context_override,
             "user_context_memory": user_context_payload,
+            "functional_analysis": functional_analysis,
+            "functional_category": functional_analysis.get("functional_category"),
         }
 
         # -----------------------------------------------------
@@ -3142,21 +3169,35 @@ class NeuroGuiaOrchestratorV2:
         case_context["expert_adaptation_plan"] = expert_adaptation_plan
 
         # -----------------------------------------------------
-        # 10) RUTINA
+        # 10) RUTINA FUNCIONAL
         # -----------------------------------------------------
-        if support_flow_payloads:
-            routine_payload = {}
-        else:
+        routine_activation = self.routine_activation_engine.evaluate(
+            message=effective_message,
+            functional_analysis=functional_analysis,
+            technical_category=category_analysis.get("detected_category"),
+            primary_state=state_analysis.get("primary_state"),
+            turn_family=conversation_control.get("turn_family"),
+            emotional_intensity=derived_emotional_intensity,
+            caregiver_capacity=derived_caregiver_capacity,
+            previous_frame=previous_frame,
+        )
+        routine_payload: Dict[str, Any] = {}
+        if routine_activation.get("should_generate"):
             routine_payload = self.routine_builder.build_routine(
                 profile=active_profile,
                 state_analysis=state_analysis,
                 stage_result=stage_result,
                 memory_payload=memory_payload,
-                routine_type=None,
+                routine_type=routine_activation.get("routine_type"),
                 caregiver_capacity=derived_caregiver_capacity,
                 emotional_intensity=derived_emotional_intensity,
                 context={
                     "detected_category": category_analysis.get("detected_category"),
+                    "functional_category": functional_analysis.get("functional_category"),
+                    "functional_category_label": functional_analysis.get("functional_category_label"),
+                    "functional_category_purpose": functional_analysis.get("functional_category_purpose"),
+                    "display_mode": routine_activation.get("display_mode"),
+                    "activation_reason": routine_activation.get("reason"),
                     "sleep_profile": active_profile.get("sleep_profile") if active_profile else None,
                     "support_network": unit_context.get("support_network"),
                     "text_hint": effective_message,
@@ -3167,6 +3208,7 @@ class NeuroGuiaOrchestratorV2:
                     **extra_context,
                 },
             )
+            routine_payload["activation"] = dict(routine_activation)
 
         # -----------------------------------------------------
         # 11) CONFIANZA
@@ -3222,6 +3264,12 @@ class NeuroGuiaOrchestratorV2:
                 intent_analysis=intent_analysis,
                 case_context=case_context,
             )
+        if routine_payload:
+            decision_payload["selected_routine_type"] = routine_payload.get("routine_type")
+            response_goal = dict(decision_payload.get("response_goal", {}) or {})
+            response_goal["selected_routine_type"] = routine_payload.get("routine_type")
+            decision_payload["response_goal"] = response_goal
+            decision_payload["response_plan"] = dict(response_goal)
         case_context["conversational_intent"] = conversational_intent
 
         # -----------------------------------------------------
@@ -3397,6 +3445,17 @@ class NeuroGuiaOrchestratorV2:
                 conversational_intent=conversational_intent,
             )
 
+        response_package = attach_routine_to_response(
+            response_package=response_package,
+            routine_payload=routine_payload,
+            functional_analysis=functional_analysis,
+            routine_activation=routine_activation,
+        )
+        conversation_frame["last_routine_type"] = (
+            routine_payload.get("routine_type") if routine_payload else None
+        )
+        conversation_frame["last_routine_generated"] = bool(routine_payload)
+
         conversation_control["last_guided_action"] = (
             response_package.get("suggested_microaction")
             or decision_payload.get("selected_microaction")
@@ -3487,6 +3546,7 @@ class NeuroGuiaOrchestratorV2:
                 tags=self._deduplicate(
                     tags
                     + [conversation_frame.get("conversation_domain") or ""]
+                    + [functional_analysis.get("functional_category") or ""]
                     + [conversation_frame.get("speaker_role") or ""]
                     + [conversation_frame.get("conversation_phase") or ""]
                 ),
@@ -3642,6 +3702,8 @@ class NeuroGuiaOrchestratorV2:
             "stage_result": stage_result,
             "stage_hints": stage_hints,
             "routine_payload": routine_payload,
+            "functional_analysis": functional_analysis,
+            "routine_activation": routine_activation,
             "confidence_payload": confidence_payload,
             "decision_payload": decision_payload,
             "fallback_payload": fallback_payload,
@@ -3899,6 +3961,65 @@ class NeuroGuiaOrchestratorV2:
             "phase_progression_reason": "stable_demo_counter",
             "should_close_with_followup": False,
         }
+        stable_primary_state = {
+            "crisis": "meltdown",
+            "ansiedad": "cognitive_anxiety",
+            "sueno": "sleep_disruption",
+            "bloqueo_ejecutivo": "executive_dysfunction",
+            "sobrecarga_cuidador": "parental_fatigue",
+        }.get(route_id, route_id)
+        functional_analysis = self.functional_category_router.route(
+            message=effective_message,
+            technical_category=conversation_frame.get("conversation_domain"),
+            primary_state=stable_primary_state,
+            conversation_domain=conversation_frame.get("conversation_domain"),
+            profile=active_profile,
+            previous_frame=previous_frame,
+        )
+        stable_emotional_intensity = 0.90 if route_id == "crisis" else (
+            0.72 if route_id in {"ansiedad", "sobrecarga_cuidador"} else 0.55
+        )
+        stable_caregiver_capacity = 0.25 if route_id == "sobrecarga_cuidador" else None
+        routine_activation = self.routine_activation_engine.evaluate(
+            message=effective_message,
+            functional_analysis=functional_analysis,
+            technical_category=conversation_frame.get("conversation_domain"),
+            primary_state=stable_primary_state,
+            turn_family=conversation_control.get("turn_family"),
+            emotional_intensity=stable_emotional_intensity,
+            caregiver_capacity=stable_caregiver_capacity,
+            previous_frame=previous_frame,
+        )
+        routine_payload: Dict[str, Any] = {}
+        if routine_activation.get("should_generate"):
+            routine_payload = self.routine_builder.build_routine(
+                profile=active_profile,
+                state_analysis={"primary_state": stable_primary_state, "flags": {}},
+                stage_result=stage_result,
+                memory_payload={},
+                routine_type=routine_activation.get("routine_type"),
+                caregiver_capacity=stable_caregiver_capacity,
+                emotional_intensity=stable_emotional_intensity,
+                context={
+                    "detected_category": conversation_frame.get("conversation_domain"),
+                    "functional_category": functional_analysis.get("functional_category"),
+                    "functional_category_label": functional_analysis.get("functional_category_label"),
+                    "functional_category_purpose": functional_analysis.get("functional_category_purpose"),
+                    "display_mode": routine_activation.get("display_mode"),
+                    "activation_reason": routine_activation.get("reason"),
+                    "sleep_profile": active_profile.get("sleep_profile") if active_profile else None,
+                    "support_network": unit_context.get("support_network"),
+                    "text_hint": effective_message,
+                    "conversation_domain": conversation_frame.get("conversation_domain"),
+                    "conversation_phase": conversation_frame.get("conversation_phase"),
+                },
+            )
+            routine_payload["activation"] = dict(routine_activation)
+
+        conversation_frame["functional_category"] = functional_analysis.get("functional_category")
+        conversation_frame["functional_category_label"] = functional_analysis.get("functional_category_label")
+        conversation_frame["functional_category_purpose"] = functional_analysis.get("functional_category_purpose")
+
         response_goal = {
             "goal": STABLE_DEMO_GOALS.get(route_id, "stable_demo_support"),
             "route_id": route_id,
@@ -3911,12 +4032,13 @@ class NeuroGuiaOrchestratorV2:
             "intervention_level": 1,
             "strategy_signature": f"stable_demo:{route_id}:{intervention_id or step_index}",
             "selected_microaction": base_response_text,
+            "selected_routine_type": routine_payload.get("routine_type"),
         }
         decision_payload = {
             "decision_mode": "stable_demo",
             "selected_strategy": route_id,
             "selected_microaction": base_response_text,
-            "selected_routine_type": None,
+            "selected_routine_type": routine_payload.get("routine_type"),
             "response_goal": response_goal,
             "response_plan": dict(response_goal),
         }
@@ -3978,11 +4100,29 @@ class NeuroGuiaOrchestratorV2:
                 "bypassed_fallback": True,
             },
         }
+        response_package = attach_routine_to_response(
+            response_package=response_package,
+            routine_payload=routine_payload,
+            functional_analysis=functional_analysis,
+            routine_activation=routine_activation,
+        )
+        conversation_frame["last_routine_type"] = (
+            routine_payload.get("routine_type") if routine_payload else None
+        )
+        conversation_frame["last_routine_generated"] = bool(routine_payload)
+        response_text = str(response_package.get("response") or response_package.get("text") or response_text)
+        conversation_frame["last_guided_action"] = response_text
+        conversation_control["last_guided_action"] = response_text
+
         category_analysis = {
             "detected_category": conversation_frame.get("conversation_domain"),
             "confidence": 1.0,
             "route_id": route_id,
             "source": "stable_demo_response",
+            "functional_category": functional_analysis.get("functional_category"),
+            "functional_category_label": functional_analysis.get("functional_category_label"),
+            "functional_category_purpose": functional_analysis.get("functional_category_purpose"),
+            "functional_category_confidence": functional_analysis.get("confidence"),
         }
         state_analysis = {
             "primary_state": route_id,
@@ -4056,10 +4196,12 @@ class NeuroGuiaOrchestratorV2:
                 secondary_states=state_analysis.get("secondary_states", []),
                 suggested_strategy=decision_payload.get("selected_strategy"),
                 suggested_microaction=decision_payload.get("selected_microaction"),
+                suggested_routine_type=decision_payload.get("selected_routine_type"),
                 response_mode=decision_payload.get("decision_mode"),
                 followup_needed=False,
                 tags=self._deduplicate([
                     conversation_frame.get("conversation_domain") or "",
+                    functional_analysis.get("functional_category") or "",
                     conversation_frame.get("support_subject") or "",
                     conversation_frame.get("conversation_phase") or "",
                     "stable_demo",
@@ -4125,7 +4267,9 @@ class NeuroGuiaOrchestratorV2:
             "response_memory_payload": {},
             "stage_result": stage_result,
             "stage_hints": {},
-            "routine_payload": {},
+            "routine_payload": routine_payload,
+            "functional_analysis": functional_analysis,
+            "routine_activation": routine_activation,
             "confidence_payload": confidence_payload,
             "decision_payload": decision_payload,
             "fallback_payload": fallback_payload,
