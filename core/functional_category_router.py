@@ -153,8 +153,9 @@ class FunctionalCategoryRouter:
     ]
 
     PRESENT_CRISIS_MARKERS = [
-        "ahora", "ahorita", "en este momento", "esta en crisis", "crisis ahora",
-        "esta golpeando", "se esta golpeando", "hay riesgo", "puede lastimarse",
+        "esta en crisis", "crisis ahora", "crisis en este momento",
+        "esta golpeando", "se esta golpeando", "hay riesgo",
+        "puede lastimarse", "riesgo inmediato", "riesgo fisico inmediato",
     ]
     NEGATED_CRISIS_MARKERS = [
         "no esta en crisis", "no hay crisis", "no es una crisis", "sin crisis",

@@ -16,6 +16,9 @@ class RoutineActivationEngine:
     EXPLICIT_MARKERS = (
         "necesito una rutina", "quiero una rutina", "hazme una rutina",
         "crea una rutina", "crear una rutina", "armar una rutina",
+        "genera una rutina", "generar una rutina", "genera la rutina",
+        "generar la rutina", "arma una rutina", "arma la rutina",
+        "rutina que te pedi", "rutina que te pedí", "ahora la rutina",
         "dame un plan", "hazme un plan", "paso a paso", "que hago cada dia",
         "que hago cada día", "organiza mi dia", "organiza mi día",
         "organizar la semana", "horario", "calendario", "secuencia",
@@ -60,6 +63,15 @@ class RoutineActivationEngine:
         turn = self._normalize_key(turn_family)
 
         explicit = any(self._normalize(marker) in text for marker in self.EXPLICIT_MARKERS)
+        routine_word = "rutina" in text or "rutinas" in text
+        routine_action = any(
+            token in text
+            for token in (
+                "genera", "generar", "crea", "crear", "haz", "hacer",
+                "arma", "armar", "organiza", "organizar", "necesito", "quiero",
+            )
+        )
+        explicit = explicit or (routine_word and routine_action)
         rejected = any(self._normalize(marker) in text for marker in self.REJECTION_MARKERS)
         meta = any(self._normalize(marker) in text for marker in self.META_MARKERS)
         practical = any(self._normalize(marker) in text for marker in self.PRACTICAL_MARKERS)
@@ -199,6 +211,14 @@ class RoutineActivationEngine:
         if category == "bienestar_cuidador":
             return "caregiver_recovery"
         if category == "rutinas_habitos":
+            if any(
+                token in text
+                for token in (
+                    "manana", "mañana", "mananas", "mañanas", "al despertar",
+                    "antes de salir", "salir de casa", "rutina matutina",
+                )
+            ):
+                return "morning_organization"
             if any(token in text for token in ("dormir", "sueno", "noche", "insomnio")):
                 return "sleep"
             if technical in {"disfuncion_ejecutiva", "bloqueo_ejecutivo"} or state == "executive_dysfunction":

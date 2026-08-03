@@ -116,6 +116,46 @@ class RoutineBuilderV2(RoutineBuilder):
             ],
             "followup_question": "¿Qué responsabilidad está generando más confusión o carga en casa?",
         },
+        "morning_organization": {
+            "name": "Rutina de mañana con baja carga",
+            "goal": "hacer más predecible la salida de casa sin concentrar demasiadas demandas al mismo tiempo",
+            "default_steps": [
+                "dejar preparados desde la noche anterior la ropa, la mochila y solo lo indispensable",
+                "usar una señal de inicio estable, como una alarma suave, una frase breve o una imagen",
+                "seguir una secuencia visible de cuatro bloques: levantarse, asearse, vestirse y desayunar",
+                "dar una sola indicación a la vez y marcar cada bloque cuando termine",
+                "reservar un pequeño margen antes de salir para absorber retrasos sin convertirlos en crisis",
+            ],
+            "short_steps": [
+                "dejar ropa y mochila preparadas",
+                "seguir una lista visible de cuatro bloques",
+                "dar una sola indicación y conservar un pequeño margen antes de salir",
+            ],
+            "adjustments": {
+                "executive": [
+                    "usar verbos concretos y mostrar únicamente el paso actual",
+                    "colocar la lista donde realmente ocurre la rutina",
+                ],
+                "tdah": [
+                    "usar un temporizador breve por bloque y permitir movimiento entre pasos",
+                ],
+                "sensory": [
+                    "reducir ruido, luz intensa y decisiones de último momento",
+                ],
+                "rigidity": [
+                    "mantener el mismo orden y anticipar cualquier cambio desde la noche anterior",
+                ],
+                "low_capacity": [
+                    "considerar suficiente completar los tres pasos indispensables",
+                ],
+            },
+            "indicators": [
+                "hay menos recordatorios repetidos",
+                "la persona identifica qué sigue",
+                "disminuye la tensión antes de salir",
+            ],
+            "followup_question": "¿Esta rutina es para ti, para tu hijo o para toda la familia?",
+        },
         "daily_habits": {
             "name": "Rutina mínima de hábitos sostenibles",
             "goal": "convertir una actividad cotidiana en una secuencia sencilla y repetible",
@@ -210,6 +250,8 @@ class RoutineBuilderV2(RoutineBuilder):
             mapped = self.FUNCTIONAL_ROUTINE_MAP[functional_category]
             text_hint = self._normalize_text(context.get("text_hint"))
             if functional_category == "rutinas_habitos":
+                if any(token in text_hint for token in ("mañana", "manana", "matut", "despert", "antes de salir")):
+                    return "morning_organization"
                 if any(token in text_hint for token in ("dorm", "sueño", "sueno", "noche")):
                     return "sleep"
                 if any(token in text_hint for token in ("tarea", "pendiente", "empezar", "bloqueo")):
