@@ -542,7 +542,7 @@ st.markdown(
     }
 
     .ng-quick-subtitle {
-        margin: 0.28rem 0 0.35rem 0;
+        margin: 0.28rem 0 0.76rem 0;
         color: var(--ng-subtext);
         font-size: 0.86rem;
         line-height: 1.48;
@@ -551,7 +551,7 @@ st.markdown(
 
     .ng-quick-button {
         height: 100%;
-        margin-top: 0.12rem;
+        margin-top: 0.42rem;
     }
 
     .ng-quick-button .stButton {
@@ -983,42 +983,16 @@ st.markdown(
         -webkit-text-fill-color: #2f241f !important;
     }
 
+    
     .ng-dashboard-access {
-        margin-top: 0.9rem;
-        padding: 0.92rem;
-        border-radius: 20px;
+        margin-top: 0.9rem; padding: 0.92rem; border-radius: 20px;
         background: linear-gradient(145deg, #fffdfb 0%, #f8eee8 100%);
-        border: 1px solid #eadfd4;
-        box-shadow: 0 10px 24px rgba(110, 71, 53, 0.06);
+        border: 1px solid #eadfd4; box-shadow: 0 10px 24px rgba(110,71,53,.06);
     }
-
-    .ng-dashboard-access-title {
-        margin: 0;
-        color: #2f241f;
-        font-size: 0.96rem;
-        font-weight: 800;
-        line-height: 1.3;
-    }
-
-    .ng-dashboard-access-copy {
-        margin: 0.28rem 0 0.7rem 0;
-        color: #73655d;
-        font-size: 0.80rem;
-        line-height: 1.45;
-    }
-
-    div[data-testid="stLinkButton"] > a {
-        border-radius: 14px !important;
-        border: 1px solid #b86e54 !important;
-        background: #b86e54 !important;
-        color: #ffffff !important;
-        font-weight: 750 !important;
-    }
-
-    div[data-testid="stLinkButton"] > a:hover {
-        background: #9f5c46 !important;
-        border-color: #9f5c46 !important;
-    }
+    .ng-dashboard-access-title {margin:0; color:#2f241f; font-size:.96rem; font-weight:800; line-height:1.3;}
+    .ng-dashboard-access-copy {margin:.28rem 0 .7rem; color:#73655d; font-size:.80rem; line-height:1.45;}
+    div[data-testid="stLinkButton"] > a {border-radius:14px!important; border:1px solid #b86e54!important; background:#b86e54!important; color:#fff!important; font-weight:750!important;}
+    div[data-testid="stLinkButton"] > a:hover {background:#9f5c46!important; border-color:#9f5c46!important;}
 
     </style>
     """,
@@ -1104,6 +1078,7 @@ def env_flag(name: str, default: bool = False) -> bool:
     return raw_value in {"1", "true", "yes", "y", "on", "si", "sí", "enabled"}
 
 
+
 def get_dashboard_url() -> str:
     """Obtiene la URL pública del dashboard sin escribirla en el código fuente."""
     value = str(os.getenv("DASHBOARD_URL", "") or "").strip()
@@ -1113,6 +1088,7 @@ def get_dashboard_url() -> str:
     if value and not value.lower().startswith(("http://", "https://")):
         return ""
     return value
+
 
 
 def derive_database_backend(default: str = "sqlite") -> str:
@@ -1771,7 +1747,7 @@ def render_quick_help() -> None:
     )
 
     row1 = st.columns(3, gap="small")
-    row2 = st.columns(2, gap="small")
+    row2 = st.columns(3, gap="small")
 
     with row1[0]:
         st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
@@ -1802,6 +1778,15 @@ def render_quick_help() -> None:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with row2[1]:
+        st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+        if st.button("🗓️ Crear una rutina", key="quick_routine"):
+            process_user_message(
+                "Necesito crear una rutina práctica. Ayúdame a organizarla según mi necesidad actual."
+            )
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with row2[2]:
         st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
         if st.button("🧼 Limpiar conversacion", key="quick_clear"):
             clear_visible_conversation()
@@ -1870,73 +1855,102 @@ def render_quick_help() -> None:
 
 
 def render_quick_help_sidebar() -> None:
-    """Muestra accesos rápidos en una columna compacta."""
-
+    st.markdown('<div class="ng-quick-wrap"><div class="ng-card ng-quick-card">', unsafe_allow_html=True)
+    st.markdown('<p class="ng-quick-title">Acceso rapido</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="ng-quick-title">Acceso rápido</p>',
+        '<p class="ng-quick-subtitle">Si no sabes como empezar, puedes usar una de estas opciones.</p>',
         unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("😰 Me siento muy ansiosa/o", key="quick_anxiety_sidebar", use_container_width=True):
+        process_user_message("😰 Me siento muy ansiosa/o y no se como calmarme")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("😫 Esta ocurriendo una crisis", key="quick_crisis_sidebar", use_container_width=True):
+        process_user_message("😫 Esta ocurriendo una crisis y necesito ayuda para manejarla")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("🥱 Hay problemas de sue\u00f1o", key="quick_sleep_sidebar", use_container_width=True):
+        process_user_message("🥱 Hay problemas de sueño y eso está afectando mucho")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("📚 No puedo organizarme", key="quick_organize_sidebar", use_container_width=True):
+        process_user_message("📚 No puedo organizarme ni empezar lo que tengo pendiente")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("🗓️ Crear una rutina", key="quick_routine_sidebar", use_container_width=True):
+        process_user_message(
+            "Necesito crear una rutina práctica. Ayúdame a organizarla según mi necesidad actual."
+        )
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("🧼 Limpiar conversacion", key="quick_clear_sidebar", use_container_width=True):
+        clear_visible_conversation()
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    return
+
+    st.markdown('<div class="ng-quick-wrap"><div class="ng-quick-card">', unsafe_allow_html=True)
+    st.markdown('<p class="ng-quick-title">Acceso rápido</p>', unsafe_allow_html=True)
     st.markdown(
-        """
-        <p class="ng-quick-subtitle">
-            Si no sabes cómo empezar, puedes usar una de estas opciones.
-        </p>
-        """,
+        '<p class="ng-quick-subtitle">Si no sabes cómo empezar, puedes usar una de estas opciones.</p>',
         unsafe_allow_html=True,
     )
 
-    with st.container(
-        key="quick_actions_sidebar",
-        gap="xsmall",
-    ):
-        if st.button(
-            "😰 Me siento muy ansiosa/o",
-            key="quick_anxiety_sidebar",
-            width="stretch",
-        ):
-            process_user_message(
-                "😰 Me siento muy ansiosa/o y no sé cómo calmarme"
-            )
-            st.rerun()
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("😰 Me siento muy ansiosa/o", key="quick_anxiety_sidebar", use_container_width=True):
+        process_user_message("😰 Me siento muy ansiosa/o y no sé cómo calmarme")
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button(
-            "😫 Está ocurriendo una crisis",
-            key="quick_crisis_sidebar",
-            width="stretch",
-        ):
-            process_user_message(
-                "😫 Está ocurriendo una crisis y necesito ayuda para manejarla"
-            )
-            st.rerun()
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("😫 Está ocurriendo una crisis", key="quick_crisis_sidebar", use_container_width=True):
+        process_user_message("😫 Está ocurriendo una crisis y necesito ayuda para manejarla")
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button(
-            "🥱 Hay problemas de sueño",
-            key="quick_sleep_sidebar",
-            width="stretch",
-        ):
-            process_user_message(
-                "🥱 Hay problemas de sueño y eso está afectando mucho"
-            )
-            st.rerun()
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("🥱 Hay problemas de sueño", key="quick_sleep_sidebar", use_container_width=True):
+        process_user_message("🥱 Hay problemas de sueño y eso está afectando mucho")
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button(
-            "📚 No puedo organizarme",
-            key="quick_organize_sidebar",
-            width="stretch",
-        ):
-            process_user_message(
-                "📚 No puedo organizarme ni empezar lo que tengo pendiente"
-            )
-            st.rerun()
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("📚 No puedo organizarme", key="quick_organize_sidebar", use_container_width=True):
+        process_user_message("📚 No puedo organizarme ni empezar lo que tengo pendiente")
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button(
-            "🧼 Limpiar conversación",
-            key="quick_clear_sidebar",
-            width="stretch",
-        ):
-            clear_visible_conversation()
-            st.rerun()
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("🧼 Limpiar conversación", key="quick_clear_sidebar", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state.last_result = None
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
+    if st.button("Empezar de nuevo", key="quick_restart_sidebar", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state.last_result = None
+        st.session_state.selected_profile_id = None
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
 
 def render_dashboard_access() -> None:
     """Muestra el acceso al panel científico sin exponer credenciales."""
@@ -1952,20 +1966,17 @@ def render_dashboard_access() -> None:
     )
     if dashboard_url:
         st.link_button(
-            "Abrir dashboard",
-            dashboard_url,
-            use_container_width=True,
+            "Abrir dashboard", dashboard_url, use_container_width=True,
             help="Abre el panel científico de neuroguIA en una nueva pestaña.",
         )
     else:
         st.button(
-            "Dashboard pendiente de publicar",
-            disabled=True,
-            use_container_width=True,
-            help="Configura DASHBOARD_URL en los secretos de Streamlit cuando el dashboard tenga una URL pública.",
+            "Dashboard pendiente de publicar", disabled=True, use_container_width=True,
+            help="Configura DASHBOARD_URL en los secretos de Streamlit.",
         )
         if env_flag("DEBUG_MODE", False):
             st.caption("Configura DASHBOARD_URL en .streamlit/secrets.toml o en Streamlit Community Cloud.")
+
 
 
 def render_response_debug_metadata() -> None:
