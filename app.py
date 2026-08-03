@@ -26,10 +26,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from database import initialize_database, load_env_file
 from core.orchestrator_v2 import NeuroGuiaOrchestratorV2
 from core.routine_response_guard import RoutineResponseGuard
+from core.conversation_continuity_guard import ConversationContinuityGuard
 from memory.profile_manager import ProfileManager
 
 
 ROUTINE_RESPONSE_GUARD = RoutineResponseGuard()
+CONVERSATION_CONTINUITY_GUARD = ConversationContinuityGuard()
 
 
 # ---------------------------------------------------------
@@ -1892,6 +1894,14 @@ def render_quick_help_sidebar() -> None:
             '<p class="ng-quick-subtitle">Elige una opción para comenzar. También puedes escribir tu situación en el centro.</p>',
             unsafe_allow_html=True,
         )
+        api_enabled = env_flag("USE_OPENAI_LLM", False) and bool(
+            str(os.getenv("OPENAI_API_KEY", "") or "").strip()
+        )
+        api_model = str(os.getenv("OPENAI_MODEL", "gpt-5-mini") or "gpt-5-mini").strip()
+        if api_enabled:
+            st.caption(f"Redactor conversacional: API OpenAI activa · {api_model}")
+        else:
+            st.caption("Redactor conversacional: modo local · configura la API para mayor fluidez")
 
         action_rows = [
             [
@@ -2664,9 +2674,12 @@ def process_user_message(user_message: str) -> None:
     profile_context_payload = build_profile_context_payload(active_context)
     persistence_enabled = bool(active_family_id)
 
-    previous_conversation_frame = {}
-    if isinstance(st.session_state.last_result, dict):
-        previous_conversation_frame = st.session_state.last_result.get("conversation_frame") or {}
+    previous_result = (
+        dict(st.session_state.last_result)
+        if isinstance(st.session_state.last_result, dict)
+        else {}
+    )
+    previous_conversation_frame = dict(previous_result.get("conversation_frame") or {})
 
     orch = get_orchestrator(st.session_state.db_path)
     try:
@@ -2714,6 +2727,18 @@ def process_user_message(user_message: str) -> None:
                 "selected_profile_id": active_profile_id,
             },
             chat_history=list(st.session_state.chat_history),
+        )
+
+        # La respuesta final se revisa contra la conversación real. Esta capa
+        # resuelve referencias como "para mí, pero también para mi hijo" y,
+        # cuando la API está habilitada, utiliza OpenAI como redactor sin
+        # permitirle cambiar la lógica de seguridad ni las rutinas estructuradas.
+        result = CONVERSATION_CONTINUITY_GUARD.ensure(
+            message=user_message,
+            result=result,
+            chat_history=list(st.session_state.chat_history),
+            previous_result=previous_result,
+            active_profile=profile_context_payload.get("active_profile", {}) or active_profile,
         )
 
         response_package = result.get("response_package", {}) or {}
