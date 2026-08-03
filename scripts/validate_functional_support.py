@@ -64,7 +64,7 @@ CASES: List[Dict[str, str]] = [
         "id": "F07",
         "message": "Necesito una rutina para organizar las mañanas",
         "expected_category": "rutinas_habitos",
-        "expected_routine": "daily_habits",
+        "expected_routine": "morning_organization",
     },
 ]
 
