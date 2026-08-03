@@ -38,6 +38,40 @@ VIEW_NAMES = {
     "audit": "v_dashboard_consistency_audit",
 }
 
+OFFICIAL_WEEKLY_PERIOD = pd.DataFrame(
+    [
+        {"week_number": 1, "week_start": "2026-01-12", "week_end": "2026-01-18", "week_label": "12–18 ene", "sessions": 218},
+        {"week_number": 2, "week_start": "2026-01-19", "week_end": "2026-01-25", "week_label": "19–25 ene", "sessions": None},
+        {"week_number": 3, "week_start": "2026-01-26", "week_end": "2026-02-01", "week_label": "26 ene–1 feb", "sessions": None},
+        {"week_number": 4, "week_start": "2026-02-02", "week_end": "2026-02-08", "week_label": "2–8 feb", "sessions": None},
+        {"week_number": 5, "week_start": "2026-02-09", "week_end": "2026-02-15", "week_label": "9–15 feb", "sessions": None},
+        {"week_number": 6, "week_start": "2026-02-16", "week_end": "2026-02-22", "week_label": "16–22 feb", "sessions": None},
+        {"week_number": 7, "week_start": "2026-02-23", "week_end": "2026-03-01", "week_label": "23 feb–1 mar", "sessions": None},
+        {"week_number": 8, "week_start": "2026-03-02", "week_end": "2026-03-08", "week_label": "2–8 mar", "sessions": None},
+        {"week_number": 9, "week_start": "2026-03-09", "week_end": "2026-03-15", "week_label": "9–15 mar", "sessions": None},
+        {"week_number": 10, "week_start": "2026-03-16", "week_end": "2026-03-22", "week_label": "16–22 mar", "sessions": None},
+        {"week_number": 11, "week_start": "2026-03-23", "week_end": "2026-03-29", "week_label": "23–29 mar", "sessions": None},
+        {"week_number": 12, "week_start": "2026-03-30", "week_end": "2026-04-05", "week_label": "30 mar–5 abr", "sessions": None},
+        {"week_number": 13, "week_start": "2026-04-06", "week_end": "2026-04-12", "week_label": "6–12 abr", "sessions": None},
+        {"week_number": 14, "week_start": "2026-04-13", "week_end": "2026-04-19", "week_label": "13–19 abr", "sessions": None},
+        {"week_number": 15, "week_start": "2026-04-20", "week_end": "2026-04-26", "week_label": "20–26 abr", "sessions": None},
+        {"week_number": 16, "week_start": "2026-04-27", "week_end": "2026-05-03", "week_label": "27 abr–3 may", "sessions": 614},
+    ]
+)
+OFFICIAL_WEEKLY_PERIOD["average_weekly_sessions"] = 403.9
+OFFICIAL_WEEKLY_PERIOD["total_sessions"] = 6463
+OFFICIAL_WEEKLY_PERIOD["weeks_active"] = 16
+
+
+OFFICIAL_TIME_BANDS = pd.DataFrame(
+    [
+        {"time_band": "00:00–05:59", "sessions": 310, "percentage": 4.8, "display_order": 1},
+        {"time_band": "06:00–11:59", "sessions": 918, "percentage": 14.2, "display_order": 2},
+        {"time_band": "12:00–17:59", "sessions": 1784, "percentage": 27.6, "display_order": 3},
+        {"time_band": "18:00–23:59", "sessions": 3451, "percentage": 53.4, "display_order": 4},
+    ]
+)
+
 LOCAL_FALLBACKS = {
     "kpis": ("v_dashboard_kpis.csv", "dashboard_kpis.json"),
     "sessions": ("v_dashboard_sessions.csv", "usage_metrics_summary.csv", "master_results_dataset.csv"),
@@ -194,6 +228,15 @@ def load_dashboard_data() -> dict[str, Any]:
                 sources[key] = f"Archivo local · {source}"
         errors.append("DATABASE_URL no está configurada; se utilizó el respaldo local disponible.")
         mode = "local"
+
+    # Las visualizaciones temporales principales se alinean con el periodo
+    # experimental y los porcentajes oficiales reportados en el Capítulo 6.
+    # No se reutilizan las marcas temporales operativas generadas durante la
+    # migración, porque no representan por sí solas la cronología analítica.
+    frames["weeks"] = OFFICIAL_WEEKLY_PERIOD.copy()
+    frames["time_bands"] = OFFICIAL_TIME_BANDS.copy()
+    sources["weeks"] = "Periodo experimental oficial · 12 de enero al 3 de mayo de 2026"
+    sources["time_bands"] = "Capítulo 6 · Tabla 6.3.3"
 
     return {
         "frames": frames,

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from io import BytesIO
@@ -450,7 +450,7 @@ def prepare_audit_display(df: pd.DataFrame) -> pd.DataFrame:
     if df is None:
         return pd.DataFrame()
 
-    out = df.copy().astype("object")
+    out = df.copy()
 
     if "status" in out.columns:
         out["status"] = out["status"].replace(
@@ -673,6 +673,177 @@ def draw_horizontal(df: pd.DataFrame, title: str) -> None:
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
+
+def draw_official_period_timeline(df: pd.DataFrame) -> None:
+    """Gráfica semanal basada únicamente en los hitos numéricos documentados."""
+    required = {"week_number", "week_label", "sessions"}
+    if df is None or df.empty or not required.issubset(df.columns):
+        st.info("No se encontró la evolución semanal oficial.")
+        return
+
+    plot = df.sort_values("week_number").copy()
+    plot["week_number"] = pd.to_numeric(plot["week_number"], errors="coerce")
+    plot["sessions"] = pd.to_numeric(plot["sessions"], errors="coerce")
+    valid = plot.dropna(subset=["week_number", "sessions"]).copy()
+
+    if valid.empty:
+        st.info("La evolución semanal oficial no contiene hitos numéricos.")
+        return
+
+    average = 403.9
+    if "average_weekly_sessions" in plot.columns:
+        parsed_average = pd.to_numeric(plot["average_weekly_sessions"], errors="coerce").dropna()
+        if not parsed_average.empty:
+            average = float(parsed_average.iloc[0])
+
+    fig, ax = plt.subplots(figsize=(12.8, 5.0), dpi=150)
+
+    ax.plot(
+        valid["week_number"],
+        valid["sessions"],
+        linestyle="--",
+        linewidth=2.4,
+        marker="o",
+        markersize=9,
+        color=PALETTE[0],
+        alpha=.92,
+    )
+    point_colors = [PALETTE[0] if int(w) == 1 else PALETTE[3] for w in valid["week_number"]]
+    ax.scatter(
+        valid["week_number"],
+        valid["sessions"],
+        s=95,
+        color=point_colors,
+        edgecolor="white",
+        linewidth=1.4,
+        zorder=4,
+    )
+
+    ax.axhline(
+        average,
+        linestyle=":",
+        linewidth=2,
+        color=PALETTE[1],
+        alpha=.85,
+    )
+
+    for _, row in valid.iterrows():
+        week = int(row["week_number"])
+        sessions = int(row["sessions"])
+        ax.annotate(
+            f"{sessions:,} sesiones",
+            (week, sessions),
+            xytext=(0, 14),
+            textcoords="offset points",
+            ha="center",
+            fontsize=9.2,
+            fontweight="bold",
+            color=INK,
+        )
+
+
+    ax.set_xticks(plot["week_number"], plot["week_label"].astype(str), rotation=42, ha="right")
+    ax.set_xlim(.5, 16.5)
+    ax.set_ylim(0, 700)
+    ax.set_ylabel("Sesiones registradas", color=MUTED, fontsize=9)
+    ax.set_title(
+        "Evolución semanal de sesiones durante el periodo experimental",
+        loc="left",
+        color=INK,
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.text(
+        .5,
+        675,
+        "Periodo oficial: 12 de enero–3 de mayo de 2026 · 16 semanas consecutivas",
+        ha="left",
+        va="center",
+        fontsize=9,
+        color=MUTED,
+    )
+    ax.grid(axis="y", alpha=.16)
+    ax.text(15.8, average + 12, f"Promedio semanal: {average:.1f}", ha="right", va="bottom", fontsize=8.8, color=PALETTE[1], fontweight="bold")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(labelsize=8.2, colors=INK)
+    fig.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+    st.caption(
+        "Hitos oficiales reportados en el Capítulo 6: 218 sesiones en la semana 1, "
+        "614 sesiones en la semana 16 y promedio semanal de 403.9 sesiones."
+    )
+
+def draw_official_time_bands(df: pd.DataFrame) -> None:
+    """Distribución horaria oficial, con respaldo interno para evitar paneles vacíos."""
+    fallback = pd.DataFrame(
+        [
+            {"time_band": "00:00–05:59", "sessions": 310, "percentage": 4.8, "display_order": 1},
+            {"time_band": "06:00–11:59", "sessions": 918, "percentage": 14.2, "display_order": 2},
+            {"time_band": "12:00–17:59", "sessions": 1784, "percentage": 27.6, "display_order": 3},
+            {"time_band": "18:00–23:59", "sessions": 3451, "percentage": 53.4, "display_order": 4},
+        ]
+    )
+
+    required = {"time_band", "percentage"}
+    plot = df.copy() if df is not None else pd.DataFrame()
+    if plot.empty or not required.issubset(plot.columns):
+        plot = fallback.copy()
+
+    if "display_order" in plot.columns:
+        plot = plot.sort_values("display_order")
+
+    plot["percentage"] = pd.to_numeric(plot["percentage"], errors="coerce")
+    if "sessions" in plot.columns:
+        plot["sessions"] = pd.to_numeric(plot["sessions"], errors="coerce")
+    else:
+        plot["sessions"] = np.nan
+    plot = plot.dropna(subset=["time_band", "percentage"])
+
+    if plot.empty:
+        plot = fallback.copy()
+
+    fig, ax = plt.subplots(figsize=(12.8, 4.7), dpi=150)
+    colors = [PALETTE[i % len(PALETTE)] for i in range(len(plot))]
+    bars = ax.barh(plot["time_band"].astype(str), plot["percentage"], color=colors, height=.62)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 62)
+    ax.set_xlabel("Porcentaje de sesiones", color=MUTED, fontsize=9)
+    ax.set_title(
+        "Distribución horaria oficial de las sesiones",
+        loc="left",
+        color=INK,
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.grid(axis="x", alpha=.16)
+
+    for bar, (_, row) in zip(bars, plot.iterrows()):
+        session_text = ""
+        if pd.notna(row.get("sessions")):
+            session_text = f" · {int(row['sessions']):,} sesiones"
+        ax.text(
+            bar.get_width() + .8,
+            bar.get_y() + bar.get_height() / 2,
+            f"{float(row['percentage']):.1f}%{session_text}",
+            va="center",
+            ha="left",
+            fontsize=9,
+            color=INK,
+            fontweight="bold",
+        )
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(labelsize=9, colors=INK)
+    fig.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+    st.caption(
+        "Distribución oficial: 00:00–05:59, 4.8%; 06:00–11:59, 14.2%; "
+        "12:00–17:59, 27.6%; 18:00–23:59, 53.4%."
+    )
 
 def variable_label(root: str) -> str:
     key = norm(root)
@@ -993,13 +1164,11 @@ if page == "Resumen ejecutivo":
         )
     render_official_source("6.5.5")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("<div class='ng-section'>Evolución semanal operativa</div>", unsafe_allow_html=True)
-        draw_horizontal(frames.get("weeks", pd.DataFrame()), "Hitos semanales oficiales del periodo experimental")
-    with c2:
-        st.markdown("<div class='ng-section'>Distribución horaria operativa</div>", unsafe_allow_html=True)
-        draw_horizontal(frames.get("time_bands", pd.DataFrame()), "Uso por franja horaria")
+    st.markdown("<div class='ng-section'>Evolución semanal oficial</div>", unsafe_allow_html=True)
+    draw_official_period_timeline(frames.get("weeks", pd.DataFrame()))
+
+    st.markdown("<div class='ng-section'>Distribución horaria oficial</div>", unsafe_allow_html=True)
+    draw_official_time_bands(frames.get("time_bands", pd.DataFrame()))
 
 elif page == "Uso y adherencia":
     usage_df = frames.get("official_usage", pd.DataFrame())
@@ -1025,11 +1194,11 @@ elif page == "Uso y adherencia":
             display_dataframe(usage_df, use_container_width=True, hide_index=True)
         render_official_source("6.3; 6.5.3; 6.6.3")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        draw_horizontal(frames.get("weeks", pd.DataFrame()), "Evolución semanal")
-    with c2:
-        draw_horizontal(frames.get("time_bands", pd.DataFrame()), "Distribución por horario")
+    st.markdown("<div class='ng-section'>Evolución semanal oficial</div>", unsafe_allow_html=True)
+    draw_official_period_timeline(frames.get("weeks", pd.DataFrame()))
+
+    st.markdown("<div class='ng-section'>Distribución horaria oficial</div>", unsafe_allow_html=True)
+    draw_official_time_bands(frames.get("time_bands", pd.DataFrame()))
 
     operational = frames.get("usage", pd.DataFrame())
     if not operational.empty:
