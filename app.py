@@ -994,6 +994,29 @@ st.markdown(
     div[data-testid="stLinkButton"] > a {border-radius:14px!important; border:1px solid #b86e54!important; background:#b86e54!important; color:#fff!important; font-weight:750!important;}
     div[data-testid="stLinkButton"] > a:hover {background:#9f5c46!important; border-color:#9f5c46!important;}
 
+    /* Panel real de accesos rápidos: mantiene los seis botones juntos y compactos. */
+    .st-key-quick_actions_panel {
+        background: linear-gradient(180deg, #ffffff 0%, #fdf8f4 100%) !important;
+        border: 1px solid #eadfd4 !important;
+        border-radius: 18px !important;
+        padding: 0.82rem !important;
+        box-shadow: 0 10px 24px rgba(110,71,53,.05) !important;
+    }
+    .st-key-quick_actions_panel div[data-testid="stHorizontalBlock"] {
+        gap: 0.42rem !important;
+        margin-bottom: 0.36rem !important;
+    }
+    .st-key-quick_actions_panel div[data-testid="stButton"] {
+        margin: 0 !important;
+    }
+    .st-key-quick_actions_panel div[data-testid="stButton"] > button {
+        min-height: 46px !important;
+        padding: 0.48rem 0.42rem !important;
+        font-size: 0.84rem !important;
+        line-height: 1.15 !important;
+        white-space: normal !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1855,102 +1878,42 @@ def render_quick_help() -> None:
 
 
 def render_quick_help_sidebar() -> None:
-    st.markdown('<div class="ng-quick-wrap"><div class="ng-card ng-quick-card">', unsafe_allow_html=True)
-    st.markdown('<p class="ng-quick-title">Acceso rapido</p>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="ng-quick-subtitle">Si no sabes como empezar, puedes usar una de estas opciones.</p>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("😰 Me siento muy ansiosa/o", key="quick_anxiety_sidebar", use_container_width=True):
-        process_user_message("😰 Me siento muy ansiosa/o y no se como calmarme")
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("😫 Esta ocurriendo una crisis", key="quick_crisis_sidebar", use_container_width=True):
-        process_user_message("😫 Esta ocurriendo una crisis y necesito ayuda para manejarla")
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("🥱 Hay problemas de sue\u00f1o", key="quick_sleep_sidebar", use_container_width=True):
-        process_user_message("🥱 Hay problemas de sueño y eso está afectando mucho")
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("📚 No puedo organizarme", key="quick_organize_sidebar", use_container_width=True):
-        process_user_message("📚 No puedo organizarme ni empezar lo que tengo pendiente")
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("🗓️ Crear una rutina", key="quick_routine_sidebar", use_container_width=True):
-        process_user_message(
-            "Necesito crear una rutina práctica. Ayúdame a organizarla según mi necesidad actual."
+    """Renderiza accesos rápidos dentro de un panel compacto de dos columnas."""
+    with st.container(border=True, key="quick_actions_panel"):
+        st.markdown(
+            '<p class="ng-quick-title">Acceso rápido</p>',
+            unsafe_allow_html=True,
         )
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            '<p class="ng-quick-subtitle">Elige una opción para comenzar. También puedes escribir tu situación en el centro.</p>',
+            unsafe_allow_html=True,
+        )
 
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("🧼 Limpiar conversacion", key="quick_clear_sidebar", use_container_width=True):
-        clear_visible_conversation()
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+        action_rows = [
+            [
+                ("😰 Ansiedad", "quick_anxiety_sidebar", "😰 Me siento muy ansiosa/o y no sé cómo calmarme"),
+                ("😫 Crisis", "quick_crisis_sidebar", "😫 Está ocurriendo una crisis y necesito ayuda para manejarla"),
+            ],
+            [
+                ("🥱 Sueño", "quick_sleep_sidebar", "🥱 Hay problemas de sueño y eso está afectando mucho"),
+                ("📚 Organización", "quick_organize_sidebar", "📚 No puedo organizarme ni empezar lo que tengo pendiente"),
+            ],
+            [
+                ("🗓️ Crear rutina", "quick_routine_sidebar", "Necesito crear una rutina práctica. Ayúdame a organizarla según mi necesidad actual."),
+                ("🧼 Limpiar", "quick_clear_sidebar", None),
+            ],
+        ]
 
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    return
-
-    st.markdown('<div class="ng-quick-wrap"><div class="ng-quick-card">', unsafe_allow_html=True)
-    st.markdown('<p class="ng-quick-title">Acceso rápido</p>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="ng-quick-subtitle">Si no sabes cómo empezar, puedes usar una de estas opciones.</p>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("😰 Me siento muy ansiosa/o", key="quick_anxiety_sidebar", use_container_width=True):
-        process_user_message("😰 Me siento muy ansiosa/o y no sé cómo calmarme")
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("😫 Está ocurriendo una crisis", key="quick_crisis_sidebar", use_container_width=True):
-        process_user_message("😫 Está ocurriendo una crisis y necesito ayuda para manejarla")
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("🥱 Hay problemas de sueño", key="quick_sleep_sidebar", use_container_width=True):
-        process_user_message("🥱 Hay problemas de sueño y eso está afectando mucho")
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("📚 No puedo organizarme", key="quick_organize_sidebar", use_container_width=True):
-        process_user_message("📚 No puedo organizarme ni empezar lo que tengo pendiente")
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("🧼 Limpiar conversación", key="quick_clear_sidebar", use_container_width=True):
-        st.session_state.chat_history = []
-        st.session_state.last_result = None
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="ng-quick-button">', unsafe_allow_html=True)
-    if st.button("Empezar de nuevo", key="quick_restart_sidebar", use_container_width=True):
-        st.session_state.chat_history = []
-        st.session_state.last_result = None
-        st.session_state.selected_profile_id = None
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div></div>', unsafe_allow_html=True)
-
+        for row in action_rows:
+            columns = st.columns(2, gap="small")
+            for column, (label, key, prompt) in zip(columns, row):
+                with column:
+                    if st.button(label, key=key, use_container_width=True):
+                        if prompt is None:
+                            clear_visible_conversation()
+                        else:
+                            process_user_message(prompt)
+                        st.rerun()
 
 def render_dashboard_access() -> None:
     """Muestra el acceso al panel científico sin exponer credenciales."""
@@ -2617,12 +2580,18 @@ def save_message_to_db(
     emotional_state: Optional[str] = None,
     profile_id: Optional[str] = None,
     family_id: Optional[str] = None,
-) -> None:
-    """Persist a user or assistant message in public.ng_messages."""
+) -> bool:
+    """Persiste un turno sin interrumpir la conversación si falta contexto o falla el registro."""
+    if not family_id:
+        # La conversación puede funcionar como sesión temporal. No se intenta
+        # insertar un NULL en tablas que requieren una familia válida.
+        st.session_state.pop("db_message_log_error", None)
+        return False
+
     engine = get_message_db_engine()
     if engine is None:
-        st.session_state["db_message_log_error"] = "DATABASE_URL no está configurada."
-        return
+        st.session_state["db_message_log_error"] = "message_store_unavailable"
+        return False
 
     try:
         with engine.begin() as conn:
@@ -2662,9 +2631,12 @@ def save_message_to_db(
                 },
             )
         st.session_state.pop("db_message_log_error", None)
+        return True
     except Exception as exc:
-        st.session_state["db_message_log_error"] = str(exc)
-        raise
+        # El registro es secundario: la persona debe recibir la respuesta aunque
+        # Supabase presente una restricción o una interrupción temporal.
+        st.session_state["db_message_log_error"] = f"{type(exc).__name__}: {exc}"
+        return False
 
 
 # ---------------------------------------------------------
@@ -2686,6 +2658,7 @@ def process_user_message(user_message: str) -> None:
     active_profile_id = active_context.get("profile_id")
     active_profile = active_context.get("active_profile") or {}
     profile_context_payload = build_profile_context_payload(active_context)
+    persistence_enabled = bool(active_family_id)
 
     previous_conversation_frame = {}
     if isinstance(st.session_state.last_result, dict):
@@ -2713,9 +2686,13 @@ def process_user_message(user_message: str) -> None:
                 ),
             },
             chat_history=build_history_hint(),
-            auto_save_case=True,
-            auto_store_system_response=st.session_state.auto_store_system_response,
-            auto_store_curated_llm_response=st.session_state.auto_store_curated_llm_response,
+            auto_save_case=persistence_enabled,
+            auto_store_system_response=(
+                persistence_enabled and st.session_state.auto_store_system_response
+            ),
+            auto_store_curated_llm_response=(
+                persistence_enabled and st.session_state.auto_store_curated_llm_response
+            ),
             use_llm_stub=st.session_state.use_llm_stub,
         )
 
@@ -2834,7 +2811,12 @@ def main() -> None:
         render_dashboard_access()
         render_response_debug_metadata()
         if st.session_state.get("db_message_log_error"):
-            st.error(f"Error guardando mensajes: {st.session_state['db_message_log_error']}")
+            if env_flag("DEBUG_MODE", False):
+                st.error(f"Error guardando mensajes: {st.session_state['db_message_log_error']}")
+            else:
+                st.caption(
+                    "La conversación continúa, pero este turno no pudo guardarse en la memoria persistente."
+                )
         if st.session_state.get("supabase_bridge_warning") and env_flag("DEBUG_MODE", False):
             st.warning(f"Aviso puente Supabase: {st.session_state['supabase_bridge_warning']}")
         if st.session_state.get("supabase_index_warning") and env_flag("DEBUG_MODE", False):
