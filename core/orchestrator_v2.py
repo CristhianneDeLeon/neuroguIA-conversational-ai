@@ -2987,7 +2987,7 @@ class NeuroGuiaOrchestratorV2:
             )
 
         effective_family_id = family_id or (active_profile.get("family_id") if active_profile else None)
-        effective_profile_id = active_profile.get("profile_id") if active_profile else None
+        effective_profile_id = active_profile.get("profile_id") if active_profile else profile_id
 
         try:
             user_context_payload = self.user_context_memory.build_live_context_payload(
@@ -3519,38 +3519,60 @@ class NeuroGuiaOrchestratorV2:
         # 16) GUARDADO DEL CASO
         # -----------------------------------------------------
         saved_case_id = None
-        if auto_save_case:
-            saved_case_id = self.case_memory.create_case(
-                family_id=family_id,
-                profile_id=active_profile.get("profile_id") if active_profile else None,
-                unit_type=unit_context.get("unit_type", "individual"),
-                raw_input=message,
-                normalized_summary=self._normalize_summary(effective_message),
-                detected_category=category_analysis.get("detected_category"),
-                detected_stage=stage_result.get("stage"),
-                primary_state=state_analysis.get("primary_state"),
-                secondary_states=state_analysis.get("secondary_states", []),
-                emotional_intensity=derived_emotional_intensity,
-                caregiver_capacity=derived_caregiver_capacity,
-                sensory_overload_risk=self._state_score(state_analysis, "sensory_overload"),
-                executive_block_risk=self._state_score(state_analysis, "executive_dysfunction"),
-                meltdown_risk=self._state_score(state_analysis, "meltdown"),
-                shutdown_risk=self._state_score(state_analysis, "shutdown"),
-                burnout_risk=self._state_score(state_analysis, "burnout"),
-                sleep_disruption_risk=self._state_score(state_analysis, "sleep_disruption"),
-                suggested_strategy=decision_payload.get("selected_strategy"),
-                suggested_microaction=decision_payload.get("selected_microaction"),
-                suggested_routine_type=decision_payload.get("selected_routine_type"),
-                response_mode=decision_payload.get("decision_mode"),
-                followup_needed=stage_result.get("should_close_with_followup", False),
-                tags=self._deduplicate(
-                    tags
-                    + [conversation_frame.get("conversation_domain") or ""]
-                    + [functional_analysis.get("functional_category") or ""]
-                    + [conversation_frame.get("speaker_role") or ""]
-                    + [conversation_frame.get("conversation_phase") or ""]
-                ),
-            )
+        case_memory_store_result = {"stored": False, "reason": "disabled"}
+        if auto_save_case and effective_family_id:
+            try:
+                saved_case_id = self.case_memory.create_case(
+                    family_id=effective_family_id,
+                    profile_id=effective_profile_id,
+                    unit_type=unit_context.get("unit_type", "individual"),
+                    raw_input=message,
+                    normalized_summary=self._normalize_summary(effective_message),
+                    detected_category=category_analysis.get("detected_category"),
+                    detected_stage=stage_result.get("stage"),
+                    primary_state=state_analysis.get("primary_state"),
+                    secondary_states=state_analysis.get("secondary_states", []),
+                    emotional_intensity=derived_emotional_intensity,
+                    caregiver_capacity=derived_caregiver_capacity,
+                    sensory_overload_risk=self._state_score(state_analysis, "sensory_overload"),
+                    executive_block_risk=self._state_score(state_analysis, "executive_dysfunction"),
+                    meltdown_risk=self._state_score(state_analysis, "meltdown"),
+                    shutdown_risk=self._state_score(state_analysis, "shutdown"),
+                    burnout_risk=self._state_score(state_analysis, "burnout"),
+                    sleep_disruption_risk=self._state_score(state_analysis, "sleep_disruption"),
+                    suggested_strategy=decision_payload.get("selected_strategy"),
+                    suggested_microaction=decision_payload.get("selected_microaction"),
+                    suggested_routine_type=decision_payload.get("selected_routine_type"),
+                    response_mode=decision_payload.get("decision_mode"),
+                    followup_needed=stage_result.get("should_close_with_followup", False),
+                    tags=self._deduplicate(
+                        tags
+                        + [conversation_frame.get("conversation_domain") or ""]
+                        + [functional_analysis.get("functional_category") or ""]
+                        + [conversation_frame.get("speaker_role") or ""]
+                        + [conversation_frame.get("conversation_phase") or ""]
+                    ),
+                )
+                case_memory_store_result = {
+                    "stored": True,
+                    "reason": "stored",
+                    "case_id": saved_case_id,
+                }
+            except Exception as exc:
+                # La memoria persistente no debe bloquear la respuesta conversacional.
+                case_memory_store_result = {
+                    "stored": False,
+                    "reason": f"case_store_failed:{type(exc).__name__}",
+                    "case_id": None,
+                }
+                conversation_frame["case_memory_error"] = case_memory_store_result["reason"]
+        elif auto_save_case:
+            case_memory_store_result = {
+                "stored": False,
+                "reason": "missing_family_context",
+                "case_id": None,
+            }
+            conversation_frame["case_memory_status"] = "temporary_session"
 
         # -----------------------------------------------------
         # 17) GUARDADO OPCIONAL DE RESPUESTA LOCAL
@@ -3558,6 +3580,7 @@ class NeuroGuiaOrchestratorV2:
         stored_response_id = None
         if (
             auto_store_system_response
+            and effective_family_id
             and response_package.get("mode") == "system_generated"
             and response_package.get("response")
         ):
@@ -3567,8 +3590,8 @@ class NeuroGuiaOrchestratorV2:
                 detected_category=category_analysis.get("detected_category"),
                 primary_state=state_analysis.get("primary_state"),
                 conversation_stage=conversation_frame.get("conversation_phase"),
-                profile_id=active_profile.get("profile_id") if active_profile else None,
-                family_id=family_id,
+                profile_id=effective_profile_id,
+                family_id=effective_family_id,
                 conditions_signature=conditions_signature,
                 complexity_signature=complexity_signature,
                 response_structure_json={
@@ -3600,7 +3623,7 @@ class NeuroGuiaOrchestratorV2:
         learning_payload = None
         learning_store_result = None
 
-        if auto_store_curated_llm_response and llm_curated_payload:
+        if auto_store_curated_llm_response and effective_family_id and llm_curated_payload:
             learning_payload = self.learning_engine.build_learning_payload(
                 llm_curated_payload=llm_curated_payload,
                 conversation_frame=conversation_frame,
@@ -3611,7 +3634,7 @@ class NeuroGuiaOrchestratorV2:
                 stage_result=stage_result,
                 active_profile=active_profile,
                 case_id=saved_case_id,
-                family_id=family_id,
+                family_id=effective_family_id,
                 tags=tags,
             )
 
@@ -3679,6 +3702,7 @@ class NeuroGuiaOrchestratorV2:
 
         return {
             "case_id": saved_case_id,
+            "case_memory_store_result": case_memory_store_result,
             "stored_response_id": stored_response_id,
             "curated_llm_response_id": curated_llm_response_id,
             "learning_payload": learning_payload,
