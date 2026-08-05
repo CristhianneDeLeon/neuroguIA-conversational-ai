@@ -20,7 +20,7 @@ from dashboard_data_loader import (
 )
 
 st.set_page_config(
-    page_title="neuroguIA · Dashboard científico",
+    page_title="neuroguIA · Dashboard científico v3",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
