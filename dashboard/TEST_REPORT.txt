@@ -1,0 +1,24 @@
+neuroguIA dashboard v3 · Reporte de validación
+Fecha: 2026-08-04
+
+- Compilación Python: OK
+- Autoverificación del maestro: OK
+- Participantes: 562
+- Familias analíticas: 281
+- Semanas activas: 18
+- Sesiones dentro de intervención: 1,325
+- SHA-256 del maestro: 672eb3530ea169bd8e7e4ead3b92f3392a2964d2307f9b4b6badc98b66cc5a7e
+- Ejecución simulada de páginas: OK
+  Resumen ejecutivo
+  DASS-21
+  MSPSS y apoyo
+  WHOQOL-BREF
+  Uso y adherencia
+  Correlaciones y regresión
+  Analítica conversacional y PLN
+  Experiencia y usabilidad
+  Sociodemografía
+  Metodología y calidad
+  Descargas
+
+Nota: el entorno de construcción no incluye el ejecutable Streamlit; la aplicación fue validada con compilación, carga real del Excel y ejecución simulada de todos los flujos de página.

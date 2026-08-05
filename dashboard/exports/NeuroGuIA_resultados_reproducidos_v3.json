@@ -1,0 +1,612 @@
+{
+  "metadata": {
+    "version": "3.0.0-auditado",
+    "seed": 42,
+    "python": "3.13.5",
+    "numpy": "2.3.5",
+    "scipy": "1.17.0",
+    "statsmodels": "0.14.6",
+    "n_total": 562,
+    "n_experimental": 281,
+    "n_control": 281,
+    "whoqol_link_rule": "EXP/CON ordinal → PT ordinal E/C → canonical FAM ordinal"
+  },
+  "outcomes": {
+    "Estrés": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 17.88612099644128,
+          "pre_sd": 5.597306709444577,
+          "post_mean": 12.455516014234876,
+          "post_sd": 6.114880547302486,
+          "favorable_change_mean": 5.430604982206406,
+          "favorable_change_sd": 2.183457936682272,
+          "shapiro_change_w": 0.9330169060850908,
+          "shapiro_change_p": 5.843060779009251e-10,
+          "wilcoxon_statistic": 0.0,
+          "wilcoxon_p": 4.978841536048568e-48,
+          "wilcoxon_r": 0.8686312419947207
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 17.98220640569395,
+          "pre_sd": 5.8085254558734825,
+          "post_mean": 18.160142348754448,
+          "post_sd": 6.001724036327886,
+          "favorable_change_mean": -0.17793594306049823,
+          "favorable_change_sd": 1.4578643906743658,
+          "shapiro_change_w": 0.8739208299699801,
+          "shapiro_change_p": 1.9478367018549244e-14,
+          "wilcoxon_statistic": 11204.0,
+          "wilcoxon_p": 0.04320074366931592,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": -5.607469754930899,
+        "se_hc3": 0.15703848883035276,
+        "ci95_low": -5.915259537224986,
+        "ci95_high": -5.299679972636812,
+        "p_group": 3.0115389491134603e-279,
+        "b_pre": 1.0111481060876857,
+        "r2": 0.9232825841600778,
+        "r2_adjusted": 0.9230081032447293,
+        "b_group_x_pre": 0.018341024036986356,
+        "p_group_x_pre": 0.5019591385299775,
+        "shapiro_w_residuals": 0.9683095178357516,
+        "shapiro_p": 1.1618983976103228e-09,
+        "levene_statistic": 64.18512402575104,
+        "levene_p": 6.606687632033812e-15
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": -0.9415802163824863,
+        "hedges_g": -0.9403186082319068,
+        "ci95_low": -1.123042834821061,
+        "ci95_high": -0.7630903112343459
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 3.021101052915595,
+        "hedges_g": 3.017053128324819,
+        "ci95_low": 2.8267531546382787,
+        "ci95_high": 3.2569101506102487
+      },
+      "mann_whitney_change": {
+        "u": 78103.0,
+        "p": 1.9075138687527188e-90
+      }
+    },
+    "Ansiedad": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 12.822064056939501,
+          "pre_sd": 5.212314814403816,
+          "post_mean": 8.832740213523131,
+          "post_sd": 5.346273331568578,
+          "favorable_change_mean": 3.9893238434163703,
+          "favorable_change_sd": 1.9684729138619186,
+          "shapiro_change_w": 0.9280042552223967,
+          "shapiro_change_p": 2.0086043414460122e-10,
+          "wilcoxon_statistic": 0.0,
+          "wilcoxon_p": 6.545811698127444e-48,
+          "wilcoxon_r": 0.8690624633768631
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 12.825622775800712,
+          "pre_sd": 5.035749169691719,
+          "post_mean": 12.95373665480427,
+          "post_sd": 5.185280876988127,
+          "favorable_change_mean": -0.12811387900355872,
+          "favorable_change_sd": 1.4409668137794944,
+          "shapiro_change_w": 0.8789487155893605,
+          "shapiro_change_p": 4.034033927700546e-14,
+          "wilcoxon_statistic": 10871.0,
+          "wilcoxon_p": 0.08322588591741692,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": -4.117539635448806,
+        "se_hc3": 0.14551615205185403,
+        "ci95_low": -4.402746052639294,
+        "ci95_high": -3.8323332182583183,
+        "p_group": 3.8596229985326174e-176,
+        "b_pre": 0.9713624388553683,
+        "r2": 0.907672088730398,
+        "r2_adjusted": 0.9073417563108287,
+        "b_group_x_pre": -0.034476895399055886,
+        "p_group_x_pre": 0.21519746686280683,
+        "shapiro_w_residuals": 0.9624008389329224,
+        "shapiro_p": 8.485691277175966e-11,
+        "levene_statistic": 32.05601135084741,
+        "levene_p": 2.39528496307756e-08
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": -0.7825084392616272,
+        "hedges_g": -0.7814599688204549,
+        "ci95_low": -0.9446857031917892,
+        "ci95_high": -0.6242363353043491
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 2.3869162132887642,
+        "hedges_g": 2.3837180227394716,
+        "ci95_low": 2.222376345258463,
+        "ci95_high": 2.582121754768556
+      },
+      "mann_whitney_change": {
+        "u": 74917.5,
+        "p": 9.257187544655854e-77
+      }
+    },
+    "Depresión": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 12.519572953736654,
+          "pre_sd": 5.311759981653394,
+          "post_mean": 8.807829181494663,
+          "post_sd": 5.40556022463402,
+          "favorable_change_mean": 3.711743772241993,
+          "favorable_change_sd": 1.666531090910099,
+          "shapiro_change_w": 0.9147449837694042,
+          "shapiro_change_p": 1.476456043173254e-11,
+          "wilcoxon_statistic": 0.0,
+          "wilcoxon_p": 5.2079447092060345e-48,
+          "wilcoxon_r": 0.8699971847520168
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 12.533807829181494,
+          "pre_sd": 5.3771769098739295,
+          "post_mean": 12.633451957295375,
+          "post_sd": 5.417315344470327,
+          "favorable_change_mean": -0.099644128113879,
+          "favorable_change_sd": 1.4030705669210088,
+          "shapiro_change_w": 0.8886340179747669,
+          "shapiro_change_p": 1.7440451758046797e-13,
+          "wilcoxon_statistic": 11359.0,
+          "wilcoxon_p": 0.18694098862461983,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": -3.8117999517388994,
+        "se_hc3": 0.12976249012619218,
+        "ci95_low": -4.066129758930471,
+        "ci95_high": -3.5574701445473282,
+        "p_group": 1.1389472081731983e-189,
+        "b_pre": 0.971053390334281,
+        "r2": 0.9287213230575412,
+        "r2_adjusted": 0.9284663009575682,
+        "b_group_x_pre": -0.004852686478825544,
+        "p_group_x_pre": 0.8421656496346821,
+        "shapiro_w_residuals": 0.9539785939983164,
+        "shapiro_p": 3.1010161754917858e-12,
+        "levene_statistic": 10.667058333476845,
+        "levene_p": 0.0011572886505520094
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": -0.7069508458906163,
+        "hedges_g": -0.7060036138505663,
+        "ci95_low": -0.875301109317348,
+        "ci95_high": -0.5390531110492294
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 2.4742145257425445,
+        "hedges_g": 2.4708993655919294,
+        "ci95_low": 2.2916685674239505,
+        "ci95_high": 2.700596858234844
+      },
+      "mann_whitney_change": {
+        "u": 75215.0,
+        "p": 4.328131541178241e-78
+      }
+    },
+    "Apoyo auxiliar 1-5": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 2.6902135231316726,
+          "pre_sd": 0.6906792391464364,
+          "post_mean": 3.4046263345195733,
+          "post_sd": 0.7064346743763071,
+          "favorable_change_mean": 0.7144128113879004,
+          "favorable_change_sd": 0.23152543915980225,
+          "shapiro_change_w": 0.9424173584760088,
+          "shapiro_change_p": 5.002352543813963e-09,
+          "wilcoxon_statistic": 0.0,
+          "wilcoxon_p": 7.397547774675632e-48,
+          "wilcoxon_r": -0.867015114017523
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 2.693594306049822,
+          "pre_sd": 0.6738441684811367,
+          "post_mean": 2.7270462633451955,
+          "post_sd": 0.6985557764789144,
+          "favorable_change_mean": 0.03345195729537368,
+          "favorable_change_sd": 0.13926531207713222,
+          "shapiro_change_w": 0.9417721477231515,
+          "shapiro_change_p": 4.288144891727004e-09,
+          "wilcoxon_statistic": 10580.5,
+          "wilcoxon_p": 5.1663431061271994e-05,
+          "wilcoxon_r": -0.25861541393445525
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": 0.6809298594558612,
+        "se_hc3": 0.016168327494992567,
+        "ci95_low": 0.649240519875427,
+        "ci95_high": 0.7126191990362953,
+        "p_group": 0.0,
+        "b_pre": 0.9908321127251586,
+        "r2": 0.940101727713068,
+        "r2_adjusted": 0.9398874226243848,
+        "b_group_x_pre": -0.04910075130226454,
+        "p_group_x_pre": 0.03275414401082949,
+        "shapiro_w_residuals": 0.980696814769176,
+        "shapiro_p": 8.965186166363989e-07,
+        "levene_statistic": 94.43835946851821,
+        "levene_p": 9.83881665019708e-21
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": 0.964518181544672,
+        "hedges_g": 0.9632258391844066,
+        "ci95_low": 0.7989574745566421,
+        "ci95_high": 1.136260930014723
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 3.564339939626909,
+        "hedges_g": 3.5595641380106158,
+        "ci95_low": 3.3798760041161855,
+        "ci95_high": 3.812160894442992
+      },
+      "mann_whitney_change": {
+        "u": 78961.0,
+        "p": 1.3793088689540556e-93
+      }
+    },
+    "WHOQOL Físico": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 54.257752923233355,
+          "pre_sd": 12.550232115666324,
+          "post_mean": 61.50228774783934,
+          "post_sd": 13.590078962435932,
+          "favorable_change_mean": 7.244534824606,
+          "favorable_change_sd": 9.463015514476703,
+          "shapiro_change_w": 0.9842453112297458,
+          "shapiro_change_p": 0.0034889402746517573,
+          "wilcoxon_statistic": 3690.0,
+          "wilcoxon_p": 2.2983380307191867e-25,
+          "wilcoxon_r": -0.6608591737952938
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 55.36349771225216,
+          "pre_sd": 13.455210480086295,
+          "post_mean": 56.55821047280123,
+          "post_sd": 13.90184142192199,
+          "favorable_change_mean": 1.1947127605490588,
+          "favorable_change_sd": 8.811878144587338,
+          "shapiro_change_w": 0.9812613573456686,
+          "shapiro_change_p": 0.0009553930363180711,
+          "wilcoxon_statistic": 10944.0,
+          "wilcoxon_p": 0.04305793086467883,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": 5.841121839555758,
+        "se_hc3": 0.7426083856802725,
+        "ci95_low": 4.385636149004993,
+        "ci95_high": 7.296607530106522,
+        "p_group": 3.6709028619078286e-15,
+        "b_pre": 0.8112582337494172,
+        "r2": 0.6024327844900028,
+        "r2_adjusted": 0.6010103615364787,
+        "b_group_x_pre": -0.017274048405444397,
+        "p_group_x_pre": 0.7676763333613208,
+        "shapiro_w_residuals": 0.9982577762098347,
+        "shapiro_p": 0.8499708274468301,
+        "levene_statistic": 2.328065184063587,
+        "levene_p": 0.1276242715682716
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": 0.3596518056913805,
+        "hedges_g": 0.35916991403569754,
+        "ci95_low": 0.20753312969509471,
+        "ci95_high": 0.5342160339509785
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 0.6616712173351039,
+        "hedges_g": 0.6607846547392998,
+        "ci95_low": 0.5061876806503286,
+        "ci95_high": 0.8234815133399314
+      },
+      "mann_whitney_change": {
+        "u": 54262.5,
+        "p": 1.2642526976801678e-14
+      }
+    },
+    "WHOQOL Psicológico": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 48.81376037959668,
+          "pre_sd": 13.750054561779049,
+          "post_mean": 62.27758007117438,
+          "post_sd": 14.068725007241389,
+          "favorable_change_mean": 13.463819691577699,
+          "favorable_change_sd": 10.628688706130085,
+          "shapiro_change_w": 0.98402495070489,
+          "shapiro_change_p": 0.003162876875592017,
+          "wilcoxon_statistic": 1087.0,
+          "wilcoxon_p": 1.6300361000859904e-39,
+          "wilcoxon_r": -0.8126108005432834
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 49.540332147093714,
+          "pre_sd": 13.79137909527549,
+          "post_mean": 49.76275207591933,
+          "post_sd": 13.686471585566547,
+          "favorable_change_mean": 0.22241992882562334,
+          "favorable_change_sd": 8.83953373559446,
+          "shapiro_change_w": 0.9800270899157686,
+          "shapiro_change_p": 0.0005709239801655497,
+          "wilcoxon_statistic": 12404.0,
+          "wilcoxon_p": 0.5880875382453874,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": 13.064075910949581,
+        "se_hc3": 0.7793814110951883,
+        "ci95_low": 11.536516414983007,
+        "ci95_high": 14.591635406916156,
+        "p_group": 4.6194563081081306e-63,
+        "b_pre": 0.7559444782531293,
+        "r2": 0.6366923977554615,
+        "r2_adjusted": 0.6353925494468943,
+        "b_group_x_pre": -0.06233027128340633,
+        "p_group_x_pre": 0.2830766341923243,
+        "shapiro_w_residuals": 0.9971536900812906,
+        "shapiro_p": 0.4404532170151405,
+        "levene_statistic": 7.194475110394685,
+        "levene_p": 0.007528740400398853
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": 0.9017151967306244,
+        "hedges_g": 0.900507003077122,
+        "ci95_low": 0.7338156222626107,
+        "ci95_high": 1.066828333664745
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 1.3546007189819012,
+        "hedges_g": 1.3527857113191295,
+        "ci95_low": 1.1808994349448865,
+        "ci95_high": 1.5609287917685
+      },
+      "mann_whitney_change": {
+        "u": 65188.0,
+        "p": 7.534577639137139e-41
+      }
+    },
+    "WHOQOL Relaciones": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 45.52194543297746,
+          "pre_sd": 13.871734307926683,
+          "post_mean": 62.09964412811388,
+          "post_sd": 15.297977997934362,
+          "favorable_change_mean": 16.57769869513642,
+          "favorable_change_sd": 13.719916328103498,
+          "shapiro_change_w": 0.9624747094920607,
+          "shapiro_change_p": 1.1299515058149591e-06,
+          "wilcoxon_statistic": 525.5,
+          "wilcoxon_p": 7.195761339505328e-38,
+          "wilcoxon_r": -0.8355931166476095
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 46.55990510083036,
+          "pre_sd": 14.261881351122707,
+          "post_mean": 47.21233689205219,
+          "post_sd": 15.562814031879334,
+          "favorable_change_mean": 0.6524317912218265,
+          "favorable_change_sd": 11.99658495626528,
+          "shapiro_change_w": 0.9531110257782253,
+          "shapiro_change_p": 7.607603560557335e-08,
+          "wilcoxon_statistic": 9415.5,
+          "wilcoxon_p": 0.25950248615279126,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": 15.595188378824092,
+        "se_hc3": 1.022016232037064,
+        "ci95_low": 13.592073372416117,
+        "ci95_high": 17.598303385232068,
+        "p_group": 1.4290856776570226e-52,
+        "b_pre": 0.6819929181123278,
+        "r2": 0.5027163316492911,
+        "r2_adjusted": 0.5009371414226338,
+        "b_group_x_pre": -0.1226124383778528,
+        "p_group_x_pre": 0.0820051078223653,
+        "shapiro_w_residuals": 0.9959819360753646,
+        "shapiro_p": 0.1628167085641603,
+        "levene_statistic": 4.297407352895273,
+        "levene_p": 0.03862729301516818
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": 0.9647684393964615,
+        "hedges_g": 0.9634757617197356,
+        "ci95_low": 0.7975368716524206,
+        "ci95_high": 1.1384423660061813
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 1.2357535679079823,
+        "hedges_g": 1.2340978016267299,
+        "ci95_low": 1.0642018858027018,
+        "ci95_high": 1.412765715790457
+      },
+      "mann_whitney_change": {
+        "u": 63472.5,
+        "p": 3.98642389746163e-36
+      }
+    },
+    "WHOQOL Entorno": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 52.3020462633452,
+          "pre_sd": 13.129400377777918,
+          "post_mean": 61.020907473309606,
+          "post_sd": 13.829984769591126,
+          "favorable_change_mean": 8.718861209964412,
+          "favorable_change_sd": 9.708739855994846,
+          "shapiro_change_w": 0.9841213958463372,
+          "shapiro_change_p": 0.0033014978863251925,
+          "wilcoxon_statistic": 3088.5,
+          "wilcoxon_p": 1.3461583171315866e-29,
+          "wilcoxon_r": -0.7061096693694773
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 50.244661921708186,
+          "pre_sd": 12.97947273484484,
+          "post_mean": 51.96841637010676,
+          "post_sd": 13.937325952825473,
+          "favorable_change_mean": 1.7237544483985765,
+          "favorable_change_sd": 8.78242910264925,
+          "shapiro_change_w": 0.9876478888163812,
+          "shapiro_change_p": 0.016645094731326707,
+          "wilcoxon_statistic": 10755.0,
+          "wilcoxon_p": 0.0010330728828111576,
+          "wilcoxon_r": 0.0
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": 7.377555759561619,
+        "se_hc3": 0.7591890201018284,
+        "ci95_low": 5.88957262270378,
+        "ci95_high": 8.865538896419459,
+        "p_group": 2.5349179568801204e-22,
+        "b_pre": 0.8141091140555109,
+        "r2": 0.625882659803829,
+        "r2_adjusted": 0.6245441362253096,
+        "b_group_x_pre": -0.06622087887363501,
+        "p_group_x_pre": 0.24991282128095704,
+        "shapiro_w_residuals": 0.9974699715522246,
+        "shapiro_p": 0.5536218082438991,
+        "levene_statistic": 2.345155565549607,
+        "levene_p": 0.12623770440209983
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": 0.652020179736801,
+        "hedges_g": 0.6511465484106687,
+        "ci95_low": 0.5024626119551845,
+        "ci95_high": 0.8269008145766169
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 0.7556413770178376,
+        "hedges_g": 0.7546289053201809,
+        "ci95_low": 0.5828756920723154,
+        "ci95_high": 0.9290046350032732
+      },
+      "mann_whitney_change": {
+        "u": 55759.0,
+        "p": 1.9499055766016356e-17
+      }
+    },
+    "WHOQOL Global descriptivo": {
+      "descriptives": {
+        "Experimental": {
+          "n": 281,
+          "pre_mean": 50.22387624978818,
+          "pre_sd": 6.794226520037542,
+          "post_mean": 61.7251048551093,
+          "post_sd": 7.329562951371972,
+          "favorable_change_mean": 11.50122860532113,
+          "favorable_change_sd": 5.348379668321437,
+          "shapiro_change_w": 0.9960747138830247,
+          "shapiro_change_p": 0.7101789337701394,
+          "wilcoxon_statistic": 32.0,
+          "wilcoxon_p": 1.0994313097150967e-47,
+          "wilcoxon_r": -0.8653948569804784
+        },
+        "Control": {
+          "n": 281,
+          "pre_mean": 50.427099220471106,
+          "pre_sd": 6.8973097266199215,
+          "post_mean": 51.37542895271987,
+          "post_sd": 7.179054277407772,
+          "favorable_change_mean": 0.9483297322487716,
+          "favorable_change_sd": 5.0456712988650905,
+          "shapiro_change_w": 0.9950097880700083,
+          "shapiro_change_p": 0.49690081620789667,
+          "wilcoxon_statistic": 15409.0,
+          "wilcoxon_p": 0.001678031349837953,
+          "wilcoxon_r": -0.18776988280650475
+        }
+      },
+      "ancova": {
+        "n": 562,
+        "b_group_experimental": 10.506787171950199,
+        "se_hc3": 0.4201838685723466,
+        "ci95_low": 9.683241922663688,
+        "ci95_high": 11.33033242123671,
+        "p_group": 5.3651978264695367e-138,
+        "b_pre": 0.7730979870643894,
+        "r2": 0.6903468814509929,
+        "r2_adjusted": 0.6892389990948247,
+        "b_group_x_pre": -0.0020467807064128846,
+        "p_group_x_pre": 0.9718592203331587,
+        "shapiro_w_residuals": 0.9966883731931546,
+        "shapiro_p": 0.303029908159989,
+        "levene_statistic": 2.2386387955518434,
+        "levene_p": 0.13516277156839845
+      },
+      "posttest_experimental_minus_control": {
+        "cohen_d": 1.4266168713751894,
+        "hedges_g": 1.4247053704309618,
+        "ci95_low": 1.2710859808528119,
+        "ci95_high": 1.5981214001676902
+      },
+      "change_experimental_minus_control": {
+        "cohen_d": 2.029704580735643,
+        "hedges_g": 2.026985012293389,
+        "ci95_low": 1.8556315410008681,
+        "ci95_high": 2.2440773696094762
+      },
+      "mann_whitney_change": {
+        "u": 73032.5,
+        "p": 4.731591089213189e-68
+      }
+    }
+  },
+  "temporal_window": {
+    "intervention_start": "2026-01-12",
+    "intervention_end": "2026-05-17",
+    "posttest_close_start": "2026-05-18",
+    "posttest_close_end": "2026-05-21",
+    "sessions_operational_total": 6463,
+    "sessions_intervention_18_weeks": 1325,
+    "sessions_posttest_close_4_days": 209,
+    "sessions_before_intervention": 15,
+    "sessions_after_close": 4914
+  }
+}

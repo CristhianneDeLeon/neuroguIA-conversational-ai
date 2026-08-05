@@ -1,50 +1,71 @@
-# neuroguIA · Dashboard de investigación conectado a Supabase
+# neuroguIA · Dashboard científico v3.1
 
-Panel científico para visualizar los resultados consolidados de neuroguIA a partir de las vistas canónicas creadas en Supabase.
+Dashboard Streamlit alineado con `NeuroGuIA_Documento_Maestro_Oficial_v3_AUDITADO.xlsx`.
 
-## Fuente de datos
+## Regla de privacidad
 
-El dashboard consulta en modo de solo lectura:
+Este repositorio debe permanecer **privado**, porque contiene el documento maestro con
+registros pseudonimizados. El dashboard puede compartirse públicamente desde Streamlit,
+pero el código no ofrece la descarga del Excel maestro ni de tablas individuales.
 
-- `v_dashboard_kpis`
-- `v_dashboard_sessions`
-- `v_dashboard_prepost`
-- `v_dashboard_usage`
-- `v_dashboard_categories`
-- `v_dashboard_states`
-- `v_dashboard_time_bands`
-- `v_dashboard_weeks`
-- `v_dashboard_whoqol`
-- `v_whoqol_participant_scores`
+Nunca subas:
 
-Cuando `DATABASE_URL` no está configurada, utiliza los archivos locales disponibles únicamente como respaldo de desarrollo.
+- `.streamlit/secrets.toml`
+- `.env`
+- claves de OpenAI, Supabase o PostgreSQL
+
+## Estructura
+
+```text
+.streamlit/config.toml
+assets/
+data/NeuroGuIA_Documento_Maestro_Oficial_v3_AUDITADO.xlsx
+exports/NeuroGuIA_resultados_reproducidos_v3.json
+dashboard.py
+dashboard_data_loader.py
+dashboard_selfcheck.py
+neuroguia_analisis_oficial_v3.py
+requirements.txt
+README.md
+CAMBIOS_V3.md
+MANIFESTO_DASHBOARD_V3.json
+TEST_REPORT.txt
+.gitignore
+```
 
 ## Ejecución local
 
-```powershell
-cd "D:\Documents\00_MIA\000 TESIS NeuroGuía\01_ CÓDIGO_NEUROGUÍA\neuroguIA_dashboard"
-pip install -r requirements.txt
-streamlit run dashboard.py --server.port 8502
+```bash
+python dashboard_selfcheck.py
+streamlit run dashboard.py
 ```
 
-Crea `.streamlit/secrets.toml` con:
+## Despliegue en Streamlit Community Cloud
+
+Selecciona:
+
+- Repositorio: el repositorio privado del dashboard
+- Rama: `main`
+- Main file path: `dashboard.py`
+
+En Secrets configura como mínimo:
 
 ```toml
-DATABASE_URL = "TU_CADENA_DE_CONEXION_SESSION_POOLER"
+DASHBOARD_AUDIT_MODE = false
 ```
 
-No compartas ese archivo ni lo subas a GitHub.
-
-## Publicación en Streamlit Community Cloud
-
-1. Sube esta carpeta a un repositorio privado o público sin credenciales.
-2. Despliega `dashboard.py` como archivo principal.
-3. En **Settings → Secrets**, agrega `DATABASE_URL`.
-4. Copia la URL pública generada.
-5. En los secretos de la aplicación principal de neuroguIA agrega:
+Después copia la URL pública generada y agrégala en los Secrets de la app principal:
 
 ```toml
-DASHBOARD_URL = "https://URL-DEL-DASHBOARD.streamlit.app"
+DASHBOARD_URL = "https://TU-DASHBOARD.streamlit.app"
 ```
 
-Con ello aparecerá habilitado el botón **Abrir dashboard** dentro de neuroguIA.
+## Fuente canónica
+
+El maestro debe permanecer en:
+
+```text
+data/NeuroGuIA_Documento_Maestro_Oficial_v3_AUDITADO.xlsx
+```
+
+La ruta puede sustituirse localmente con `NEUROGUIA_MASTER_XLSX`.

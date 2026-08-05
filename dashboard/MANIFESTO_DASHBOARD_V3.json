@@ -1,0 +1,88 @@
+{
+  "project": "neuroguIA dashboard científico",
+  "version": "3.0.0-auditado",
+  "generated_at": "2026-08-04",
+  "entrypoint": "dashboard.py",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 58,
+      "sha256": "9b0e3cf8a537f57898ecffd4d2d80b7a60c07acfed47d983c374207fbecf2c31"
+    },
+    {
+      "path": ".streamlit/config.toml",
+      "bytes": 201,
+      "sha256": "17e9b072a96da5c77ebedf1a68f8f094fc996394a76563b15faeb57d1656ac5a"
+    },
+    {
+      "path": "CAMBIOS_V3.md",
+      "bytes": 1871,
+      "sha256": "f0d6816f8a26add48628faf8c327570fea2b4b756982342805f3874081caebe2"
+    },
+    {
+      "path": "ENLACE_DESDE_APP_PRINCIPAL.py.txt",
+      "bytes": 494,
+      "sha256": "3012c7f767ab756d6a012ff129c30a8da8aeb9993d4e4e53c3e4203cfc9dbc4e"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1319,
+      "sha256": "9ce615e464c4d760f9397cdf13c540bf59966860614dc2558990a4a306aa0bab"
+    },
+    {
+      "path": "TEST_REPORT.txt",
+      "bytes": 786,
+      "sha256": "b74b30af0eed2081c9af1206c5954143d38f4fcbb6cb21f1d554d5f713de4cdc"
+    },
+    {
+      "path": "app.py",
+      "bytes": 43,
+      "sha256": "121e4861f6a879b449145dda46e2211b9aa14638518eaafd15714d02a08bd64e"
+    },
+    {
+      "path": "assets/logo_full.png",
+      "bytes": 171543,
+      "sha256": "131b1ad111df8f63f9170a890da9c7c1b8ff0db806bbc4b9f77859dd203ceb81"
+    },
+    {
+      "path": "assets/logo_icon.png",
+      "bytes": 419177,
+      "sha256": "a76736e6130f3d95c94b9370d8bd1eb83e76e671da1b466cc9ab165201d1eed2"
+    },
+    {
+      "path": "dashboard.py",
+      "bytes": 36320,
+      "sha256": "f1460d3fc228ea79066005ddcd31e7aadae93e075c0e2e7b24dc46f980adc1b0"
+    },
+    {
+      "path": "dashboard_data_loader.py",
+      "bytes": 7950,
+      "sha256": "8ed3151e41a429d80699884d36e595a64168ac12b3c21b28d36a8b2561c77924"
+    },
+    {
+      "path": "dashboard_selfcheck.py",
+      "bytes": 2537,
+      "sha256": "19fde6111c93d997a3ab897c0fd910226de865b86d06001e528acebbf7571d5c"
+    },
+    {
+      "path": "data/NeuroGuIA_Documento_Maestro_Oficial_v3_AUDITADO.xlsx",
+      "bytes": 1225211,
+      "sha256": "672eb3530ea169bd8e7e4ead3b92f3392a2964d2307f9b4b6badc98b66cc5a7e"
+    },
+    {
+      "path": "exports/NeuroGuIA_resultados_reproducidos_v3.json",
+      "bytes": 21760,
+      "sha256": "c9f59d7baa2f83899111f0f61cea4bfe1166e01c2cfada965373705f023e8d14"
+    },
+    {
+      "path": "neuroguia_analisis_oficial_v3.py",
+      "bytes": 10050,
+      "sha256": "9ac33bf7bc395866ff3375f72f3974aaabe113ebb9f186db40934153ac8b0126"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 70,
+      "sha256": "f1218dd5cfb27d31dce353098c6b804cf06b66c1d8039c5bb6d55efc265dbc02"
+    }
+  ]
+}
