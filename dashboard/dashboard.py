@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import Iterable
 from io import BytesIO
 import os
+import textwrap
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import FancyBboxPatch, Rectangle
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -35,7 +37,7 @@ st.set_page_config(
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
-BUILD_ID = "DASH-V3.3-PDF-SPEARMAN-20260805"
+BUILD_ID = "DASH-V3.4-COMPLETO-PDF-20260805"
 PALETTE = ["#6E57D2", "#00A6A6", "#E45C88", "#FF7A59", "#3F8EFC", "#F2B84B"]
 INK = "#241F35"
 MUTED = "#716A7E"
@@ -379,47 +381,157 @@ def calculate_spearman_results(usage: pd.DataFrame) -> pd.DataFrame:
 
     return pd.DataFrame(rows, columns=columns)
 
-def _pdf_footer(fig, master_hash: str) -> None:
-    """Control técnico discreto en el pie del PDF."""
-    fig.text(
-        0.99,
-        0.012,
-        f"neuroguIA · {BUILD_ID} · control {master_hash[:10]}…{master_hash[-6:]}",
-        ha="right",
-        va="bottom",
-        fontsize=5.5,
-        color="#B7B1BE",
-    )
+def _pdf_wrap(value: object, width: int = 88) -> str:
+    return "\n".join(textwrap.wrap(str(value), width=width, break_long_words=False))
 
 
-def _pdf_text_page(
-    pdf: PdfPages,
+def _pdf_page_base(
     title: str,
-    paragraphs: list[str],
+    subtitle: str,
     master_hash: str,
-    subtitle: str | None = None,
+    page_number: int,
+) -> tuple[plt.Figure, plt.Axes]:
+    """Crea una página A4 horizontal con cabecera institucional y pie discreto."""
+    fig = plt.figure(figsize=(11.69, 8.27), facecolor="#F8F6FC")
+    canvas = fig.add_axes([0, 0, 1, 1])
+    canvas.set_xlim(0, 1)
+    canvas.set_ylim(0, 1)
+    canvas.axis("off")
+
+    canvas.add_patch(Rectangle((0, .91), 1, .09, facecolor=PALETTE[0], edgecolor="none"))
+    canvas.add_patch(Rectangle((.78, .91), .22, .09, facecolor=PALETTE[1], edgecolor="none", alpha=.95))
+    canvas.text(.055, .958, title, fontsize=20, fontweight="bold", color="white", va="center")
+    canvas.text(.055, .924, subtitle, fontsize=8.8, color="#EEEAFB", va="center")
+    canvas.text(.945, .953, "neuroguIA", fontsize=12, fontstyle="italic", fontweight="bold", color="white", ha="right")
+
+    canvas.plot([.055, .945], [.055, .055], color="#DDD7E8", linewidth=.7)
+    canvas.text(.055, .026, f"Informe público de resultados · página {page_number}", fontsize=6.5, color="#A49DAF")
+    canvas.text(
+        .945,
+        .026,
+        f"control {BUILD_ID} · {master_hash[:8]}…{master_hash[-6:]}",
+        fontsize=5.8,
+        color="#B8B1C1",
+        ha="right",
+    )
+    return fig, canvas
+
+
+def _pdf_card(
+    canvas: plt.Axes,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    label: str,
+    value: str,
+    note: str = "",
+    accent: str = PALETTE[0],
 ) -> None:
-    fig = plt.figure(figsize=(11.69, 8.27))
-    fig.patch.set_facecolor("white")
-    fig.text(0.07, 0.89, title, fontsize=23, fontweight="bold", color=INK)
-    if subtitle:
-        fig.text(0.07, 0.835, subtitle, fontsize=11.5, color=PALETTE[0], fontweight="bold")
-    y = 0.76
-    for paragraph in paragraphs:
-        fig.text(
-            0.07,
-            y,
-            paragraph,
-            fontsize=11,
-            color="#4B4655",
-            va="top",
-            wrap=True,
-            linespacing=1.45,
+    canvas.add_patch(
+        FancyBboxPatch(
+            (x, y), w, h,
+            boxstyle="round,pad=0.008,rounding_size=0.018",
+            facecolor="white",
+            edgecolor="#E2DCEB",
+            linewidth=.9,
         )
-        y -= 0.115
-    _pdf_footer(fig, master_hash)
-    pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
+    )
+    canvas.add_patch(
+        FancyBboxPatch(
+            (x, y), .009, h,
+            boxstyle="round,pad=0,rounding_size=0.006",
+            facecolor=accent,
+            edgecolor="none",
+        )
+    )
+    canvas.text(x + .025, y + h - .032, label.upper(), fontsize=7.2, fontweight="bold", color=MUTED, va="top")
+    canvas.text(x + .025, y + h * .48, value, fontsize=18, fontweight="bold", color=INK, va="center")
+    if note:
+        canvas.text(x + .025, y + .025, _pdf_wrap(note, 34), fontsize=6.8, color=MUTED, va="bottom")
+
+
+def _pdf_explanation(
+    canvas: plt.Axes,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    title: str,
+    body: str,
+    accent: str = PALETTE[1],
+) -> None:
+    canvas.add_patch(
+        FancyBboxPatch(
+            (x, y), w, h,
+            boxstyle="round,pad=0.012,rounding_size=0.018",
+            facecolor="#FFFFFF",
+            edgecolor=accent,
+            linewidth=1.2,
+        )
+    )
+    canvas.text(x + .018, y + h - .025, title, fontsize=9.2, fontweight="bold", color=accent, va="top")
+    canvas.text(x + .018, y + h - .058, _pdf_wrap(body, max(42, int(w * 112))), fontsize=7.6, color="#4B4655", va="top", linespacing=1.35)
+
+
+def _pdf_axis(ax: plt.Axes, title: str, ylabel: str = "") -> None:
+    ax.set_title(title, loc="left", fontsize=12, fontweight="bold", color=INK, pad=10)
+    if ylabel:
+        ax.set_ylabel(ylabel, color=MUTED, fontsize=8)
+    ax.grid(axis="y", alpha=.16)
+    ax.set_facecolor("white")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(colors=INK, labelsize=7.5)
+
+
+def _pdf_table(
+    ax: plt.Axes,
+    headers: list[str],
+    rows: list[list[object]],
+    col_widths: list[float] | None = None,
+    font_size: float = 7.2,
+) -> None:
+    ax.axis("off")
+    table = ax.table(
+        cellText=[[str(value) for value in row] for row in rows],
+        colLabels=headers,
+        loc="center",
+        cellLoc="center",
+        colLoc="center",
+        colWidths=col_widths,
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(font_size)
+    table.scale(1, 1.45)
+    for (row, col), cell in table.get_celld().items():
+        cell.set_edgecolor("#E3DDEB")
+        cell.set_linewidth(.55)
+        if row == 0:
+            cell.set_facecolor("#EEEAF8")
+            cell.set_text_props(weight="bold", color=INK)
+        else:
+            cell.set_facecolor("white" if row % 2 else "#FAF9FC")
+            cell.set_text_props(color="#4B4655")
+
+
+def _pdf_effect_rows(effect_df: pd.DataFrame, result_names: list[str], definition: str = "Postest E-C") -> list[list[str]]:
+    rows: list[list[str]] = []
+    for result_name in result_names:
+        found = effect_df[
+            (effect_df["resultado"].astype(str) == result_name)
+            & (effect_df["definicion"].astype(str) == definition)
+        ] if {"resultado", "definicion"}.issubset(effect_df.columns) else pd.DataFrame()
+        if found.empty:
+            continue
+        row = found.iloc[0]
+        rows.append([
+            result_name,
+            fmt_num(row.get("cohen_d"), 3),
+            fmt_num(row.get("hedges_g"), 3),
+            f"[{fmt_num(row.get('ic_bajo'), 2)}, {fmt_num(row.get('ic_alto'), 2)}]",
+        ])
+    return rows
 
 
 def create_visual_report(
@@ -428,434 +540,489 @@ def create_visual_report(
     indicators: dict[str, object],
     master_hash: str,
 ) -> bytes:
-    """Genera un PDF público con resultados agregados, gráficas y explicaciones."""
-    output_buffer = BytesIO()
+    """Genera un informe visual completo, explicativo y exclusivamente agregado."""
+    buffer = BytesIO()
 
-    with PdfPages(output_buffer) as pdf:
-        dass = all_frames.get("dass_summary", pd.DataFrame()).copy()
-        mspss = all_frames.get("mspss_official", pd.DataFrame()).copy()
-        who = all_frames.get("whoqol_summary", pd.DataFrame()).copy()
+    dass = all_frames.get("dass_summary", pd.DataFrame()).copy()
+    ancova = all_frames.get("ancova", pd.DataFrame()).copy()
+    effects = all_frames.get("effects", pd.DataFrame()).copy()
+    mspss = all_frames.get("mspss_official", pd.DataFrame()).copy()
+    support = all_frames.get("support_individual", pd.DataFrame()).copy()
+    who = all_frames.get("whoqol_summary", pd.DataFrame()).copy()
+    weekly = all_frames.get("usage_weekly", pd.DataFrame()).copy()
+    regression = all_frames.get("regression", pd.DataFrame()).copy()
+    pln_official = all_frames.get("pln_official", pd.DataFrame()).copy()
+    pln_categories = all_frames.get("pln_categories", pd.DataFrame()).copy()
+    pln_confusion = all_frames.get("pln_confusion", pd.DataFrame()).copy()
+    experience = all_frames.get("experience_summary", pd.DataFrame()).copy()
+    baseline = all_frames.get("baseline_comparability", pd.DataFrame()).copy()
+    sample_flow = all_frames.get("sample_flow", pd.DataFrame()).copy()
+    usage_individual = all_frames.get("usage_participant", pd.DataFrame()).copy()
+    spearman_results = calculate_spearman_results(usage_individual)
 
-        stress = dass[
-            (dass["resultado"].astype(str) == "Estrés")
-            & (dass["grupo"].astype(str) == "Experimental")
-        ] if {"resultado", "grupo"}.issubset(dass.columns) else pd.DataFrame()
-
-        mspss_exp = mspss[
-            mspss["grupo"].astype(str) == "Experimental"
-        ] if "grupo" in mspss.columns else pd.DataFrame()
-
-        who_global = who[
-            (who["dominio"].astype(str) == "Global descriptivo")
-            & (who["grupo"].astype(str) == "Experimental")
-        ] if {"dominio", "grupo"}.issubset(who.columns) else pd.DataFrame()
-
-        stress_change = stress.iloc[0].get("cambio_pct") if not stress.empty else None
-        mspss_change = mspss_exp.iloc[0].get("cambio_pct") if not mspss_exp.empty else None
-        who_change = who_global.iloc[0].get("cambio_pct") if not who_global.empty else None
-
-        # Página 1: síntesis
-        _pdf_text_page(
-            pdf,
-            "neuroguIA",
-            [
-                "Dashboard científico de resultados · Informe visual público.",
-                (
-                    f"La investigación integró {fmt_count(parameters.get('n total'))} participantes, "
-                    f"{fmt_count(parameters.get('familias'))} familias analíticas y una intervención de 18 semanas."
-                ),
-                (
-                    f"Durante la ventana metodológica se registraron "
-                    f"{fmt_count(parameters.get('sesiones ventana activa'))} sesiones. "
-                    f"El corpus técnico completo reúne "
-                    f"{fmt_count(parameters.get('sesiones técnicas totales'))} sesiones y "
-                    f"{fmt_count(parameters.get('mensajes técnicos totales'))} mensajes."
-                ),
-                (
-                    f"Principales cambios del grupo experimental: estrés {fmt_pct(stress_change)}, "
-                    f"MSPSS {fmt_pct(mspss_change, signed=True)} y WHOQOL global "
-                    f"{fmt_pct(who_change, signed=True)}."
-                ),
-                (
-                    "El documento contiene exclusivamente resultados agregados. "
-                    "No incluye bases de datos, identificadores, scripts, archivos JSON ni tablas descargables."
-                ),
-            ],
+    with PdfPages(buffer) as pdf:
+        # ------------------------------------------------------------------
+        # 1. Portada y síntesis
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base(
+            "Informe científico visual de resultados",
+            "Síntesis pública derivada del Documento Maestro Oficial v3 auditado",
             master_hash,
-            subtitle="Síntesis de resultados",
+            1,
         )
+        canvas.text(.055, .855, "neuroguIA", fontsize=34, fontweight="bold", color=INK)
+        canvas.text(.055, .815, "Acompañamiento socioemocional no clínico en contextos de neurodivergencia", fontsize=11, color=MUTED)
 
-        # Página 2: DASS-21
-        if not dass.empty:
-            dimensions = ["Estrés", "Ansiedad", "Depresión"]
-            fig, axes = plt.subplots(1, 3, figsize=(11.69, 8.27))
-            fig.suptitle(
-                "DASS-21 · cambios pretest–postest",
-                fontsize=20,
-                fontweight="bold",
-                color=INK,
-                y=0.95,
+        stress_row = dass[(dass.get("resultado", pd.Series(dtype=str)).astype(str) == "Estrés") & (dass.get("grupo", pd.Series(dtype=str)).astype(str) == "Experimental")]
+        mspss_row = mspss[mspss.get("grupo", pd.Series(dtype=str)).astype(str) == "Experimental"]
+        who_row = who[(who.get("dominio", pd.Series(dtype=str)).astype(str) == "Global descriptivo") & (who.get("grupo", pd.Series(dtype=str)).astype(str) == "Experimental")]
+
+        cards = [
+            ("Participantes", fmt_count(parameters.get("n total")), "281 experimental + 281 control", PALETTE[0]),
+            ("Familias analíticas", fmt_count(parameters.get("familias")), "Cruce PT-FAM-WHOQOL validado", PALETTE[1]),
+            ("Intervención", "18 semanas", "12 enero - 17 mayo de 2026", PALETTE[2]),
+            ("Sesiones activas", fmt_count(parameters.get("sesiones ventana activa")), "Ventana metodológica", PALETTE[3]),
+            ("Reducción de estrés", fmt_pct(stress_row.iloc[0].get("cambio_pct") if not stress_row.empty else None), "Grupo experimental", PALETTE[0]),
+            ("Incremento MSPSS", fmt_pct(mspss_row.iloc[0].get("cambio_pct") if not mspss_row.empty else None, signed=True), "Resultado oficial agregado", PALETTE[1]),
+            ("WHOQOL global", fmt_pct(who_row.iloc[0].get("cambio_pct") if not who_row.empty else None, signed=True), "Cambio experimental", PALETTE[2]),
+            ("Mensajes técnicos", fmt_count(parameters.get("mensajes técnicos totales")), "Corpus técnico completo", PALETTE[3]),
+        ]
+        positions = [(.055,.60),(.285,.60),(.515,.60),(.745,.60),(.055,.40),(.285,.40),(.515,.40),(.745,.40)]
+        for (label, value, note, accent), (x, y) in zip(cards, positions):
+            _pdf_card(canvas, x, y, .20, .155, label, value, note, accent)
+
+        principal_anc = ancova[ancova.get("resultado", pd.Series(dtype=str)).astype(str) == "Estrés"]
+        principal_eff = effects[(effects.get("resultado", pd.Series(dtype=str)).astype(str) == "Estrés") & (effects.get("definicion", pd.Series(dtype=str)).astype(str) == "Postest E-C")]
+        anc_text = fmt_num(principal_anc.iloc[0].get("b_grupo"), 2) if not principal_anc.empty else "-"
+        p_text = fmt_p(principal_anc.iloc[0].get("p_grupo")) if not principal_anc.empty else "-"
+        d_text = fmt_num(abs(principal_eff.iloc[0].get("cohen_d")), 3) if not principal_eff.empty else "-"
+        _pdf_explanation(
+            canvas, .055, .14, .89, .18,
+            "Hallazgo principal",
+            f"El grupo experimental redujo el estrés en {fmt_pct(stress_row.iloc[0].get('cambio_pct') if not stress_row.empty else None)}. "
+            f"La diferencia ajustada por el valor basal fue de {anc_text} puntos (p {p_text}) y el tamaño del efecto postest fue |d| = {d_text}. "
+            "El cambio supera el umbral metodológico del 15 %, por lo que se acepta H1.",
+            PALETTE[1],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 2. DASS descriptivo
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("DASS-21: evolución descriptiva", "Estrés, ansiedad y depresión por grupo y momento", master_hash, 2)
+        dimensions = ["Estrés", "Ansiedad", "Depresión"]
+        legend_handles = None
+        for index, dimension in enumerate(dimensions):
+            ax = fig.add_axes([.06 + index * .305, .31, .27, .48])
+            subset = order_groups(dass[dass.get("resultado", pd.Series(dtype=str)).astype(str) == dimension].copy())
+            if subset.empty:
+                ax.axis("off")
+                continue
+            x = np.arange(len(subset)); width = .34
+            pre = pd.to_numeric(subset["pre_media"], errors="coerce")
+            post = pd.to_numeric(subset["post_media"], errors="coerce")
+            b1 = ax.bar(x - width/2, pre, width, label="Pretest", color=PALETTE[0])
+            b2 = ax.bar(x + width/2, post, width, label="Postest", color=PALETTE[1])
+            ax.set_xticks(x, subset["grupo"].astype(str), rotation=10)
+            _pdf_axis(ax, dimension, "Puntuación media" if index == 0 else "")
+            ax.bar_label(b1, fmt="%.2f", padding=2, fontsize=7)
+            ax.bar_label(b2, fmt="%.2f", padding=2, fontsize=7)
+            if legend_handles is None:
+                legend_handles = (b1, b2)
+
+        if legend_handles is not None:
+            fig.legend(
+                legend_handles,
+                ["Pretest", "Postest"],
+                loc="upper center",
+                bbox_to_anchor=(.50, .845),
+                ncol=2,
+                frameon=False,
+                fontsize=8,
             )
 
-            for ax, dimension in zip(axes, dimensions):
-                subset = order_groups(
-                    dass[dass["resultado"].astype(str) == dimension].copy()
-                )
-                if subset.empty:
-                    ax.axis("off")
-                    continue
+        exp_changes = []
+        for dimension in dimensions:
+            found = dass[(dass.get("resultado", pd.Series(dtype=str)).astype(str) == dimension) & (dass.get("grupo", pd.Series(dtype=str)).astype(str) == "Experimental")]
+            if not found.empty:
+                exp_changes.append(f"{dimension.lower()}: {fmt_pct(found.iloc[0].get('cambio_pct'))}")
+        _pdf_explanation(
+            canvas, .055, .10, .89, .145,
+            "Qué significan estos resultados",
+            "En DASS-21, una puntuación menor representa menor intensidad de síntomas. El grupo experimental muestra reducciones sustantivas en "
+            + ", ".join(exp_changes)
+            + ". El grupo control permanece prácticamente estable, lo que apoya que el cambio no se explica únicamente por el paso del tiempo.",
+            PALETTE[0],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
 
-                x = np.arange(len(subset))
-                width = 0.34
-                pre = pd.to_numeric(subset["pre_media"], errors="coerce")
-                post = pd.to_numeric(subset["post_media"], errors="coerce")
+        # ------------------------------------------------------------------
+        # 3. DASS inferencial: ANCOVA + efectos
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("DASS-21: evidencia inferencial", "ANCOVA ajustada, intervalos y tamaños del efecto", master_hash, 3)
+        anc_rows: list[list[str]] = []
+        for dimension in dimensions:
+            found = ancova[ancova.get("resultado", pd.Series(dtype=str)).astype(str) == dimension]
+            if found.empty:
+                continue
+            row = found.iloc[0]
+            anc_rows.append([
+                dimension,
+                fmt_num(row.get("b_grupo"), 3),
+                f"[{fmt_num(row.get('ic_bajo'),2)}, {fmt_num(row.get('ic_alto'),2)}]",
+                fmt_p(row.get("p_grupo")),
+                fmt_num(row.get("r2_aj"), 3),
+                fmt_p(row.get("p_interaccion")),
+            ])
+        table_ax = fig.add_axes([.06, .57, .88, .25])
+        _pdf_table(table_ax, ["Dimensión", "Dif. ajustada", "IC 95 %", "p grupo", "R² ajustado", "p interacción"], anc_rows, [.16,.14,.18,.12,.14,.14])
 
-                pre_bars = ax.bar(
-                    x - width / 2,
-                    pre,
-                    width,
-                    label="Pretest",
-                    color=PALETTE[0],
-                )
-                post_bars = ax.bar(
-                    x + width / 2,
-                    post,
-                    width,
-                    label="Postest",
-                    color=PALETTE[1],
-                )
-                ax.set_xticks(x, subset["grupo"].astype(str), rotation=12)
-                ax.set_title(dimension, fontweight="bold", color=INK)
-                ax.grid(axis="y", alpha=.18)
-                for spine in ax.spines.values():
-                    spine.set_visible(False)
-                ax.bar_label(pre_bars, fmt="%.2f", padding=2, fontsize=7)
-                ax.bar_label(post_bars, fmt="%.2f", padding=2, fontsize=7)
+        effect_rows = _pdf_effect_rows(effects, dimensions)
+        eff_ax = fig.add_axes([.08, .24, .40, .24])
+        if effect_rows:
+            labels = [row[0] for row in effect_rows]
+            values = [float(row[1]) for row in effect_rows]
+            lows = [] ; highs = []
+            for dimension in labels:
+                found = effects[(effects["resultado"].astype(str) == dimension) & (effects["definicion"].astype(str) == "Postest E-C")]
+                lows.append(float(found.iloc[0]["ic_bajo"]))
+                highs.append(float(found.iloc[0]["ic_alto"]))
+            y = np.arange(len(labels))
+            eff_ax.errorbar(values, y, xerr=[np.array(values)-np.array(lows), np.array(highs)-np.array(values)], fmt="o", capsize=3, color=PALETTE[0], ecolor=PALETTE[1])
+            eff_ax.axvline(0, linestyle="--", linewidth=.9, color="#888")
+            eff_ax.set_yticks(y, labels)
+            _pdf_axis(eff_ax, "Cohen d postest", "")
+        eff_table_ax = fig.add_axes([.54, .24, .40, .24])
+        _pdf_table(eff_table_ax, ["Dimensión", "Cohen d", "Hedges g", "IC 95 %"], effect_rows, [.24,.18,.18,.30])
 
-            axes[0].set_ylabel("Puntuación media")
-            axes[-1].legend(frameon=False, loc="upper right")
-            fig.text(
-                0.07,
-                0.075,
-                "Lectura: el grupo experimental presenta reducciones claras en estrés, ansiedad y depresión; "
-                "el grupo control permanece prácticamente estable. En DASS-21, una puntuación menor representa menor sintomatología.",
-                fontsize=10,
-                color="#4B4655",
-                wrap=True,
-            )
-            _pdf_footer(fig, master_hash)
-            fig.tight_layout(rect=[0.04, 0.13, 0.98, 0.91])
-            pdf.savefig(fig)
-            plt.close(fig)
+        _pdf_explanation(
+            canvas, .055, .075, .89, .115,
+            "Interpretación",
+            "La ANCOVA compara los grupos en el postest controlando el nivel basal. En las tres dimensiones, p < 0.001 confirma diferencias ajustadas significativas. "
+            "La interacción grupo por pretest presenta p > 0.05, por lo que se cumple la homogeneidad de pendientes. El signo negativo de d indica menor sintomatología en el grupo experimental.",
+            PALETTE[2],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
 
-        # Página 3: MSPSS
+        # ------------------------------------------------------------------
+        # 4. MSPSS y apoyo auxiliar
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Apoyo social percibido", "MSPSS oficial agregado e índice auxiliar individual", master_hash, 4)
         if not mspss.empty:
-            mspss = order_groups(mspss)
-            fig, ax = plt.subplots(figsize=(11.69, 8.27))
-            x = np.arange(len(mspss))
-            width = .34
-            pre = pd.to_numeric(mspss["pre_1_5"], errors="coerce")
-            post = pd.to_numeric(mspss["post_1_5"], errors="coerce")
+            mspss_plot = order_groups(mspss.copy())
+            ax = fig.add_axes([.06, .38, .40, .42])
+            x = np.arange(len(mspss_plot)); width=.34
+            b1 = ax.bar(x-width/2, pd.to_numeric(mspss_plot["pre_1_5"], errors="coerce"), width, color=PALETTE[0], label="Pretest")
+            b2 = ax.bar(x+width/2, pd.to_numeric(mspss_plot["post_1_5"], errors="coerce"), width, color=PALETTE[1], label="Postest")
+            ax.set_xticks(x, mspss_plot["grupo"].astype(str)); ax.set_ylim(0,5)
+            _pdf_axis(ax, "MSPSS oficial agregado", "Escala 1-5")
+            ax.bar_label(b1, fmt="%.2f", padding=2, fontsize=7); ax.bar_label(b2, fmt="%.2f", padding=2, fontsize=7)
+            ax.legend(frameon=False, fontsize=7)
 
-            pre_bars = ax.bar(
-                x - width / 2,
-                pre,
-                width,
-                label="Pretest",
-                color=PALETTE[0],
-            )
-            post_bars = ax.bar(
-                x + width / 2,
-                post,
-                width,
-                label="Postest",
-                color=PALETTE[1],
-            )
-            ax.set_xticks(x, mspss["grupo"].astype(str))
-            ax.set_ylim(0, 5)
-            ax.set_ylabel("Escala 1–5")
-            ax.set_title(
-                "MSPSS oficial agregado",
-                loc="left",
-                fontsize=19,
-                fontweight="bold",
-                color=INK,
-            )
-            ax.grid(axis="y", alpha=.18)
-            for spine in ax.spines.values():
-                spine.set_visible(False)
-            ax.bar_label(pre_bars, fmt="%.2f", padding=3)
-            ax.bar_label(post_bars, fmt="%.2f", padding=3)
-            ax.legend(frameon=False)
+        if not support.empty:
+            support_summary = support.groupby("grupo", as_index=False).agg(pre=("apoyo_pre_1_5","mean"), post=("apoyo_post_1_5","mean"), cambio=("mejora_apoyo","mean"))
+            support_summary = order_groups(support_summary)
+            ax = fig.add_axes([.54, .38, .40, .42])
+            x = np.arange(len(support_summary)); width=.34
+            b1 = ax.bar(x-width/2, support_summary["pre"], width, color=PALETTE[2], label="Pretest")
+            b2 = ax.bar(x+width/2, support_summary["post"], width, color=PALETTE[1], label="Postest")
+            ax.set_xticks(x, support_summary["grupo"].astype(str)); ax.set_ylim(0,5)
+            _pdf_axis(ax, "Índice auxiliar individual", "Escala 1-5")
+            ax.bar_label(b1, fmt="%.2f", padding=2, fontsize=7); ax.bar_label(b2, fmt="%.2f", padding=2, fontsize=7)
+            ax.legend(frameon=False, fontsize=7)
 
-            fig.text(
-                0.08,
-                0.075,
-                "Lectura: el apoyo social percibido aumentó de 2.69 a 4.48 en el grupo experimental, "
-                "mientras que el control mostró un cambio mínimo. El resultado se presenta de forma agregada "
-                "porque la fuente recuperada no contiene la matriz individual de los 12 reactivos.",
-                fontsize=10,
-                color="#4B4655",
-                wrap=True,
-            )
-            _pdf_footer(fig, master_hash)
-            fig.tight_layout(rect=[0.05, 0.14, 0.98, 0.94])
-            pdf.savefig(fig)
-            plt.close(fig)
+        aux_anc = ancova[ancova.get("resultado", pd.Series(dtype=str)).astype(str) == "Apoyo auxiliar 1-5"]
+        anc_sentence = ""
+        if not aux_anc.empty:
+            row = aux_anc.iloc[0]
+            anc_sentence = f" Para el índice auxiliar, la diferencia ajustada fue {fmt_num(row.get('b_grupo'),3)} puntos, IC 95 % [{fmt_num(row.get('ic_bajo'),2)}, {fmt_num(row.get('ic_alto'),2)}], p {fmt_p(row.get('p_grupo'))}."
+        _pdf_explanation(
+            canvas, .055, .13, .89, .17,
+            "Qué debe interpretarse -y qué no",
+            "La MSPSS oficial aumentó de 2.69 a 4.48 en el grupo experimental, mientras el control cambió mínimamente. "
+            "El índice auxiliar permite análisis individuales, pero no equivale a la administración original de los 12 reactivos MSPSS; por ello se presenta como evidencia complementaria y no como una segunda puntuación del mismo instrumento."
+            + anc_sentence,
+            PALETTE[1],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
 
-        # Página 4: WHOQOL-BREF
+        # ------------------------------------------------------------------
+        # 5. WHOQOL-BREF + ANCOVA
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("WHOQOL-BREF: calidad de vida", "Cambios por dominio, ANCOVA y tamaño del efecto", master_hash, 5)
         if not who.empty:
             plot = who.copy()
-            plot["etiqueta"] = (
-                plot["dominio"].astype(str) + " · " + plot["grupo"].astype(str)
-            )
-            plot["porcentaje"] = (
-                pd.to_numeric(plot["cambio_pct"], errors="coerce") * 100
-            )
-            plot = plot.dropna(subset=["porcentaje"]).sort_values("porcentaje")
+            group_short = plot["grupo"].astype(str).map({"Experimental":"Exp.", "Control":"Ctrl."}).fillna(plot["grupo"].astype(str))
+            domain_short = plot["dominio"].astype(str).replace({"Global descriptivo":"Global"})
+            plot["etiqueta"] = domain_short + " - " + group_short
+            plot["pct"] = pd.to_numeric(plot["cambio_pct"], errors="coerce") * 100
+            plot = plot.dropna(subset=["pct"]).sort_values("pct")
+            ax = fig.add_axes([.11, .39, .46, .42])
+            colors = [PALETTE[0] if "Exp." in value else PALETTE[3] for value in plot["etiqueta"]]
+            bars = ax.barh(plot["etiqueta"], plot["pct"], color=colors)
+            ax.axvline(0, color="#888", linewidth=.7)
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:.0f}%"))
+            _pdf_axis(ax, "Cambio porcentual por dominio", "")
+            ax.bar_label(bars, fmt="%.1f%%", padding=2, fontsize=6.8)
 
-            fig, ax = plt.subplots(figsize=(11.69, 8.27))
-            colors = [
-                PALETTE[0] if "Experimental" in label else PALETTE[3]
-                for label in plot["etiqueta"]
+        who_anc = ancova[ancova.get("resultado", pd.Series(dtype=str)).astype(str).str.startswith("WHOQOL")].copy()
+        who_rows: list[list[str]] = []
+        for _, row in who_anc.iterrows():
+            result_name = str(row.get("resultado", ""))
+            effect_match = effects[
+                (effects.get("resultado", pd.Series(dtype=str)).astype(str) == result_name)
+                & (effects.get("definicion", pd.Series(dtype=str)).astype(str) == "Postest E-C")
             ]
-            bars = ax.barh(
-                plot["etiqueta"],
-                plot["porcentaje"],
-                color=colors,
-            )
-            ax.axvline(0, color="#999999", linewidth=.8)
-            ax.set_title(
-                "WHOQOL-BREF · cambio porcentual por dominio",
-                loc="left",
-                fontsize=19,
-                fontweight="bold",
-                color=INK,
-            )
-            ax.set_xlabel("Cambio porcentual")
-            ax.xaxis.set_major_formatter(
-                FuncFormatter(lambda value, _: f"{value:.0f}%")
-            )
-            ax.grid(axis="x", alpha=.15)
-            for spine in ax.spines.values():
-                spine.set_visible(False)
-            ax.bar_label(bars, fmt="%.1f%%", padding=3, fontsize=8)
+            d_value = fmt_num(effect_match.iloc[0].get("cohen_d"), 2) if not effect_match.empty else "-"
+            who_rows.append([
+                result_name.replace("WHOQOL ", ""),
+                fmt_num(row.get("b_grupo"), 2),
+                f"[{fmt_num(row.get('ic_bajo'),1)}, {fmt_num(row.get('ic_alto'),1)}]",
+                fmt_p(row.get("p_grupo")),
+                fmt_num(row.get("r2_aj"), 3),
+                d_value,
+            ])
+        table_ax = fig.add_axes([.61, .40, .34, .39])
+        _pdf_table(table_ax, ["Dominio", "Dif.", "IC 95 %", "p", "R²", "d"], who_rows, [.28,.13,.25,.11,.11,.10], 6.2)
 
-            fig.text(
-                0.08,
-                0.055,
-                "Lectura: las mayores mejoras experimentales se observan en relaciones sociales y bienestar psicológico. "
-                "El índice global es descriptivo y no constituye un quinto dominio oficial del WHOQOL-BREF.",
-                fontsize=10,
-                color="#4B4655",
-                wrap=True,
-            )
-            _pdf_footer(fig, master_hash)
-            fig.tight_layout(rect=[0.05, 0.11, 0.98, 0.94])
-            pdf.savefig(fig)
-            plt.close(fig)
-
-        # Página 5: evolución temporal
-        weekly = all_frames.get("usage_weekly", pd.DataFrame()).copy()
-        if not weekly.empty:
-            active = weekly[
-                weekly["estado"].astype(str).str.contains(
-                    "Intervención",
-                    case=False,
-                    na=False,
-                )
-            ].copy()
-            active["semana"] = pd.to_numeric(
-                active["periodo"],
-                errors="coerce",
-            )
-            active = active.dropna(subset=["semana"]).sort_values("semana")
-
-            fig, axes = plt.subplots(
-                2,
-                1,
-                figsize=(11.69, 8.27),
-                sharex=True,
-            )
-            fig.suptitle(
-                "Uso durante las 18 semanas de intervención",
-                fontsize=20,
-                fontweight="bold",
-                color=INK,
-                y=.96,
-            )
-
-            chart_specs = [
-                (axes[0], "sesiones", "Sesiones por semana", PALETTE[0]),
-                (axes[1], "mensajes", "Mensajes por semana", PALETTE[1]),
-            ]
-            for ax, column, title, color in chart_specs:
-                values = pd.to_numeric(active[column], errors="coerce")
-                ax.plot(
-                    active["semana"],
-                    values,
-                    marker="o",
-                    linewidth=2.4,
-                    color=color,
-                )
-                ax.fill_between(
-                    active["semana"],
-                    values,
-                    alpha=.12,
-                    color=color,
-                )
-                ax.set_title(
-                    title,
-                    loc="left",
-                    fontweight="bold",
-                    color=INK,
-                )
-                ax.grid(axis="y", alpha=.18)
-                for spine in ax.spines.values():
-                    spine.set_visible(False)
-
-            axes[1].set_xlabel("Semana")
-            axes[1].set_xticks(active["semana"].astype(int))
-            fig.text(
-                0.08,
-                0.045,
-                "Lectura: la serie utiliza exclusivamente la ventana metodológica activa. "
-                "El total técnico del corpus incluye registros fuera de esa ventana y se reporta por separado.",
-                fontsize=10,
-                color="#4B4655",
-                wrap=True,
-            )
-            _pdf_footer(fig, master_hash)
-            fig.tight_layout(rect=[0.05, 0.10, 0.98, 0.92])
-            pdf.savefig(fig)
-            plt.close(fig)
-
-        # Página 6: analítica conversacional
-        pln_categories = all_frames.get(
-            "pln_categories",
-            pd.DataFrame(),
-        ).copy()
-        if not pln_categories.empty and "soporte" in pln_categories.columns:
-            frequency = pln_categories[
-                pd.to_numeric(
-                    pln_categories["soporte"],
-                    errors="coerce",
-                ) > 300
-            ].copy()
-
-            if not frequency.empty:
-                frequency = frequency.sort_values("soporte")
-                fig, ax = plt.subplots(figsize=(11.69, 8.27))
-                bars = ax.barh(
-                    frequency["categoria"].astype(str),
-                    pd.to_numeric(
-                        frequency["soporte"],
-                        errors="coerce",
-                    ),
-                    color=PALETTE[1],
-                )
-                ax.set_title(
-                    "Analítica conversacional · frecuencia operativa por categoría",
-                    loc="left",
-                    fontsize=18,
-                    fontweight="bold",
-                    color=INK,
-                )
-                ax.set_xlabel("Registros")
-                ax.grid(axis="x", alpha=.16)
-                for spine in ax.spines.values():
-                    spine.set_visible(False)
-                ax.bar_label(bars, padding=3)
-
-                fig.text(
-                    0.08,
-                    0.065,
-                    "Lectura: el corpus operativo y la evaluación histórica del clasificador pertenecen a capas distintas. "
-                    "Las frecuencias muestran la distribución de registros técnicos y no sustituyen la validación histórica.",
-                    fontsize=10,
-                    color="#4B4655",
-                    wrap=True,
-                )
-                _pdf_footer(fig, master_hash)
-                fig.tight_layout(rect=[0.05, 0.12, 0.98, 0.94])
-                pdf.savefig(fig)
-                plt.close(fig)
-
-        # Página 7: correlación de Spearman
-        usage_individual = all_frames.get("usage_participant", pd.DataFrame()).copy()
-        spearman_results = calculate_spearman_results(usage_individual)
-        if not usage_individual.empty and not spearman_results.empty:
-            experimental_usage = usage_individual[
-                usage_individual["grupo"].astype(str) == "Experimental"
-            ].copy()
-            message_result = spearman_results[
-                (spearman_results["muestra"].astype(str) == "Solo experimental")
-                & (spearman_results["predictor"].astype(str) == "Mensajes")
-            ]
-            fig, ax = plt.subplots(figsize=(11.69, 8.27))
-            ax.scatter(
-                pd.to_numeric(experimental_usage["mensajes"], errors="coerce"),
-                pd.to_numeric(experimental_usage["mejora_estres"], errors="coerce"),
-                alpha=.62,
-                color=PALETTE[0],
-                edgecolor="none",
-            )
-            ax.set_title(
-                "Mensajes y mejora del estrés · grupo experimental",
-                loc="left",
-                fontsize=19,
-                fontweight="bold",
-                color=INK,
-            )
-            ax.set_xlabel("Mensajes por participante")
-            ax.set_ylabel("Mejora del estrés")
-            ax.grid(alpha=.18)
-            for spine in ax.spines.values():
-                spine.set_visible(False)
-            if not message_result.empty:
-                result = message_result.iloc[0]
-                ax.text(
-                    .03,
-                    .95,
-                    f"ρ de Spearman = {fmt_num(result['rho'],4)} · p = {fmt_p(result['p'])}",
-                    transform=ax.transAxes,
-                    va="top",
-                    fontsize=12,
-                    color=INK,
-                    fontweight="bold",
-                )
-            fig.text(
-                0.08,
-                0.065,
-                "Lectura: dentro del grupo experimental, el número de mensajes no presenta una asociación monotónica "
-                "estadísticamente significativa con la mejora del estrés. El contraste incluye el coeficiente ρ y su p bilateral.",
-                fontsize=10,
-                color="#4B4655",
-                wrap=True,
-            )
-            _pdf_footer(fig, master_hash)
-            fig.tight_layout(rect=[0.05, 0.12, 0.98, 0.94])
-            pdf.savefig(fig)
-            plt.close(fig)
-
-        # Página 8: notas metodológicas
-        _pdf_text_page(
-            pdf,
-            "Notas para la lectura",
-            [
-                "1. DASS-21: una reducción indica menor intensidad de estrés, ansiedad o depresión.",
-                "2. MSPSS: se conserva el resultado oficial agregado. El índice auxiliar individual es complementario y no una segunda administración del instrumento.",
-                "3. WHOQOL-BREF: los cuatro dominios oficiales son físico, psicológico, relaciones sociales y entorno. El índice global mostrado es descriptivo.",
-                "4. Uso: la intervención se delimita del 12 de enero al 17 de mayo de 2026. El postest y cierre abarcan del 18 al 21 de mayo.",
-                "5. PLN: la evaluación histórica y el corpus operativo se presentan por separado para mantener la trazabilidad.",
-                "6. Privacidad: el informe no incluye registros individuales ni permite reconstruir el Documento Maestro.",
-            ],
-            master_hash,
-            subtitle="Criterios metodológicos",
+        _pdf_explanation(
+            canvas, .055, .105, .89, .19,
+            "Interpretación",
+            "Las mejoras más amplias del grupo experimental se observan en relaciones sociales y bienestar psicológico. "
+            "Las ANCOVA por dominio controlan el valor basal y muestran diferencias ajustadas significativas. "
+            "El índice global es una síntesis descriptiva del proyecto y no constituye un quinto dominio oficial del WHOQOL-BREF. "
+            "Un cambio positivo representa una mejor percepción de calidad de vida.",
+            PALETTE[0],
         )
+        pdf.savefig(fig)
+        plt.close(fig)
 
-    output_buffer.seek(0)
-    return output_buffer.getvalue()
+        # ------------------------------------------------------------------
+        # 6. Uso y adherencia
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Uso y adherencia", "Evolución durante las 18 semanas de intervención", master_hash, 6)
+        active = weekly[weekly.get("estado", pd.Series(dtype=str)).astype(str).str.contains("Intervención", case=False, na=False)].copy() if not weekly.empty else pd.DataFrame()
+        if not active.empty:
+            active["semana"] = pd.to_numeric(active["periodo"], errors="coerce")
+            active = active.dropna(subset=["semana"]).sort_values("semana")
+            for idx, (column, title, color) in enumerate([("sesiones","Sesiones por semana",PALETTE[0]),("mensajes","Mensajes por semana",PALETTE[1])]):
+                ax = fig.add_axes([.07, .52 - idx*.29, .60, .23])
+                values = pd.to_numeric(active[column], errors="coerce")
+                ax.plot(active["semana"], values, marker="o", linewidth=2.3, color=color)
+                ax.fill_between(active["semana"], values, alpha=.12, color=color)
+                ax.set_xticks(active["semana"].astype(int))
+                _pdf_axis(ax, title, column.capitalize())
+
+        _pdf_card(canvas, .72, .64, .22, .12, "Sesiones activas", fmt_count(parameters.get("sesiones ventana activa")), "Dentro de la intervención", PALETTE[0])
+        _pdf_card(canvas, .72, .48, .22, .12, "Sesiones técnicas", fmt_count(parameters.get("sesiones técnicas totales")), "Incluye registros fuera de ventana", PALETTE[1])
+        _pdf_card(canvas, .72, .32, .22, .12, "Mensajes técnicos", fmt_count(parameters.get("mensajes técnicos totales")), "Corpus completo", PALETTE[2])
+        _pdf_card(canvas, .72, .16, .22, .12, "Continuidad histórica", fmt_num(indicators.get("continuidad histórica"),2), "Indicador agregado 0-100", PALETTE[3])
+
+        _pdf_explanation(
+            canvas, .055, .075, .61, .11,
+            "Interpretación",
+            "La actividad crece progresivamente hacia las últimas semanas, lo que refleja una adopción acumulativa del sistema. "
+            "Las 1,325 sesiones corresponden a la ventana experimental; las 6,463 sesiones técnicas incluyen registros anteriores y posteriores, por lo que no deben confundirse.",
+            PALETTE[1],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 7. Spearman y regresión
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Relación entre uso y resultados", "Spearman bilateral y regresión ajustada", master_hash, 7)
+        experimental_usage = usage_individual[usage_individual.get("grupo", pd.Series(dtype=str)).astype(str) == "Experimental"].copy() if not usage_individual.empty else pd.DataFrame()
+        ax = fig.add_axes([.07, .38, .45, .42])
+        if not experimental_usage.empty:
+            ax.scatter(pd.to_numeric(experimental_usage["mensajes"], errors="coerce"), pd.to_numeric(experimental_usage["mejora_estres"], errors="coerce"), alpha=.58, color=PALETTE[0], edgecolor="none")
+            _pdf_axis(ax, "Mensajes y mejora del estrés", "Mejora del estrés")
+            ax.set_xlabel("Mensajes por participante", fontsize=8)
+
+        message_result = spearman_results[(spearman_results.get("muestra", pd.Series(dtype=str)).astype(str) == "Solo experimental") & (spearman_results.get("predictor", pd.Series(dtype=str)).astype(str) == "Mensajes")]
+        if not message_result.empty:
+            result = message_result.iloc[0]
+            _pdf_card(canvas, .57, .66, .17, .12, "rho Spearman", fmt_num(result.get("rho"),4), "Mensajes vs. mejora", PALETTE[0])
+            _pdf_card(canvas, .77, .66, .17, .12, "p bilateral", fmt_p(result.get("p")), f"N = {fmt_count(result.get('n'))}", PALETTE[1])
+
+        coef = regression[pd.to_numeric(regression.get("coef", pd.Series(dtype=float)), errors="coerce").notna()].copy().head(5) if not regression.empty else pd.DataFrame()
+        reg_ax = fig.add_axes([.57, .32, .37, .27])
+        if not coef.empty and {"predictor","coef","ic_bajo","ic_alto"}.issubset(coef.columns):
+            values = pd.to_numeric(coef["coef"], errors="coerce")
+            lows = pd.to_numeric(coef["ic_bajo"], errors="coerce")
+            highs = pd.to_numeric(coef["ic_alto"], errors="coerce")
+            y = np.arange(len(coef))
+            reg_ax.errorbar(values, y, xerr=[values-lows, highs-values], fmt="o", capsize=3, color=PALETTE[2], ecolor=PALETTE[1])
+            reg_ax.axvline(0, linestyle="--", linewidth=.8, color="#888")
+            reg_ax.set_yticks(y, coef["predictor"].astype(str))
+            _pdf_axis(reg_ax, "Coeficientes de la regresión", "")
+
+        _pdf_explanation(
+            canvas, .055, .085, .89, .14,
+            "Interpretación",
+            "Dentro del grupo experimental, la asociación monotónica entre mensajes y mejora del estrés es cercana a cero y no significativa cuando p > 0.05. "
+            "Esto significa que un mayor número de mensajes, por sí solo, no garantiza una mejoría mayor. La regresión incorpora simultáneamente frecuencia, continuidad, estrés basal y edad para distinguir sus aportaciones independientes.",
+            PALETTE[2],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 8. PLN: panorama y categorías
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Analítica conversacional y PLN", "Resultados históricos y corpus operativo", master_hash, 8)
+        hist = pln_official[pln_official.get("módulo", pd.Series(dtype=str)).astype(str) == "Histórico de tesis"] if not pln_official.empty else pd.DataFrame()
+        oper = pln_official[pln_official.get("módulo", pd.Series(dtype=str)).astype(str) == "Operativo técnico"] if not pln_official.empty else pd.DataFrame()
+        _pdf_card(canvas, .055, .72, .20, .12, "Corpus histórico", fmt_count(hist.iloc[0].get("registros") if not hist.empty else None), "9 categorías", PALETTE[0])
+        _pdf_card(canvas, .275, .72, .20, .12, "Accuracy histórico", fmt_pct(hist.iloc[0].get("accuracy") if not hist.empty else None), "Evaluación de tesis", PALETTE[1])
+        _pdf_card(canvas, .495, .72, .20, .12, "Corpus operativo", fmt_count(oper.iloc[0].get("registros") if not oper.empty else None), "7 categorías", PALETTE[2])
+        _pdf_card(canvas, .715, .72, .20, .12, "Accuracy técnico", fmt_pct(oper.iloc[0].get("accuracy") if not oper.empty else None), "Control interno", PALETTE[3])
+
+        frequency = pln_categories[pd.to_numeric(pln_categories.get("soporte", pd.Series(dtype=float)), errors="coerce") > 300].copy() if not pln_categories.empty else pd.DataFrame()
+        ax = fig.add_axes([.08, .26, .52, .38])
+        if not frequency.empty:
+            frequency = frequency.sort_values("soporte")
+            bars = ax.barh(frequency["categoria"].astype(str).str.replace("_"," "), pd.to_numeric(frequency["soporte"], errors="coerce"), color=PALETTE[1])
+            _pdf_axis(ax, "Frecuencia operativa por categoría", "")
+            ax.bar_label(bars, padding=2, fontsize=7)
+
+        perf = pln_categories[(pd.to_numeric(pln_categories.get("soporte", pd.Series(dtype=float)), errors="coerce") <= 300) & pd.to_numeric(pln_categories.get("f1", pd.Series(dtype=float)), errors="coerce").notna()].copy() if not pln_categories.empty else pd.DataFrame()
+        perf_rows = []
+        for _, row in perf.iterrows():
+            perf_rows.append([str(row.get("categoria","")).replace("_"," "), fmt_count(row.get("soporte")), fmt_num(row.get("precision"),3), fmt_num(row.get("recall"),3), fmt_num(row.get("f1"),3)])
+        table_ax = fig.add_axes([.65, .27, .29, .36])
+        _pdf_table(table_ax, ["Categoría", "N", "Prec.", "Recall", "F1"], perf_rows, [.36,.12,.16,.16,.14], 6.1)
+
+        _pdf_explanation(
+            canvas, .055, .085, .89, .115,
+            "Interpretación",
+            "La evaluación histórica de 1,020 casos y el corpus operativo de 6,463 registros son capas distintas. El accuracy histórico representa la evaluación científica reportada; el accuracy técnico describe un control interno del corpus operativo y no sustituye una validación externa independiente.",
+            PALETTE[1],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 9. Matriz de confusión
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("PLN: matriz de confusión", "Correspondencia entre etiqueta y predicción en el módulo operativo", master_hash, 9)
+        if not pln_confusion.empty:
+            label_col = pln_confusion.columns[0]
+            numeric = pln_confusion.drop(columns=[label_col]).apply(pd.to_numeric, errors="coerce")
+            ax = fig.add_axes([.08, .22, .58, .58])
+            im = ax.imshow(numeric.to_numpy(), cmap="Purples")
+            ax.set_xticks(range(len(numeric.columns)), [str(c).replace("_"," ") for c in numeric.columns], rotation=38, ha="right", fontsize=7)
+            ax.set_yticks(range(len(pln_confusion)), pln_confusion[label_col].astype(str).str.replace("_"," "), fontsize=7)
+            ax.set_xlabel("Predicción", fontsize=8); ax.set_ylabel("Etiqueta de referencia", fontsize=8)
+            for i in range(numeric.shape[0]):
+                for j in range(numeric.shape[1]):
+                    value = numeric.iloc[i,j]
+                    if not pd.isna(value):
+                        ax.text(j, i, f"{int(value)}", ha="center", va="center", fontsize=6.8, color="white" if value > np.nanmax(numeric.to_numpy())*.5 else INK)
+            fig.colorbar(im, ax=ax, fraction=.046, pad=.04)
+
+        _pdf_explanation(
+            canvas, .70, .46, .24, .28,
+            "Cómo leerla",
+            "Cada fila representa la categoría de referencia y cada columna la predicción del sistema. Los valores de la diagonal corresponden a clasificaciones coincidentes; los valores fuera de la diagonal muestran confusiones entre categorías.",
+            PALETTE[0],
+        )
+        _pdf_explanation(
+            canvas, .70, .19, .24, .20,
+            "Alcance",
+            "Esta matriz pertenece al módulo operativo reproducible. Debe leerse como control técnico y no como sustituto de la evaluación histórica con nueve categorías.",
+            PALETTE[3],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 10. Experiencia y usabilidad
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Experiencia y usabilidad", "Indicadores agregados disponibles al cierre", master_hash, 10)
+        exp_rows = []
+        for _, row in experience.iterrows():
+            exp_rows.append([
+                str(row.get("variable", row.get("indicador", ""))),
+                fmt_count(row.get("n")),
+                fmt_num(row.get("media"),2),
+                fmt_num(row.get("de"),2),
+                fmt_num(row.get("mínimo", row.get("minimo")),2),
+                fmt_num(row.get("máximo", row.get("maximo")),2),
+            ])
+        table_ax = fig.add_axes([.08, .42, .84, .34])
+        _pdf_table(table_ax, ["Indicador", "N", "Media", "DE", "Mín.", "Máx."], exp_rows, [.38,.10,.12,.12,.12,.12])
+        _pdf_explanation(
+            canvas, .055, .15, .89, .18,
+            "Interpretación y límite",
+            "Los indicadores agregados permiten describir saturación inicial, expectativas, satisfacción, intención de continuidad y UTIL10. "
+            "No se informa alfa de Cronbach ni análisis por reactivo de UTIL10, APOYO10 o EAPC12 porque las respuestas individuales por reactivo no se localizaron en la fuente primaria. Esta ausencia se conserva explícita para evitar estimaciones artificiales.",
+            PALETTE[2],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 11. Diseño, muestra y comparabilidad
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Diseño y calidad metodológica", "Muestra, comparabilidad basal y criterios de análisis", master_hash, 11)
+        flow_rows = []
+        for _, row in sample_flow.head(8).iterrows():
+            values = row.tolist()
+            flow_rows.append([str(v) if not pd.isna(v) else "" for v in values[:4]])
+        flow_ax = fig.add_axes([.06, .48, .42, .31])
+        if flow_rows:
+            _pdf_table(flow_ax, [str(c) for c in sample_flow.columns[:4]], flow_rows, None, 6.2)
+
+        base_rows = []
+        for _, row in baseline.head(10).iterrows():
+            base_rows.append([
+                str(row.get("variable","")),
+                str(row.get("prueba","")),
+                fmt_num(row.get("estadistico"),3),
+                fmt_p(row.get("p")),
+                fmt_num(row.get("efecto"),3),
+            ])
+        base_ax = fig.add_axes([.52, .42, .42, .37])
+        if base_rows:
+            _pdf_table(base_ax, ["Variable", "Prueba", "Estad.", "p", "Efecto"], base_rows, [.30,.26,.14,.13,.14], 6.0)
+
+        _pdf_explanation(
+            canvas, .055, .13, .89, .18,
+            "Interpretación",
+            "El diseño cuasi-experimental compara 281 participantes experimentales y 281 controles. La comparabilidad basal ayuda a verificar que los grupos no partían de diferencias relevantes. "
+            "Las distribuciones sociodemográficas especialmente regulares se preservan como aparecen en la fuente y permanecen señaladas en el control de calidad; no fueron alteradas ni aleatorizadas.",
+            PALETTE[0],
+        )
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ------------------------------------------------------------------
+        # 12. Cierre metodológico
+        # ------------------------------------------------------------------
+        fig, canvas = _pdf_page_base("Claves para la lectura del informe", "Alcances, restricciones y reproducibilidad", master_hash, 12)
+        notes = [
+            ("DASS-21", "Una reducción indica menor intensidad de estrés, ansiedad o depresión."),
+            ("ANCOVA", "Compara los grupos en el postest controlando el nivel basal. El valor p informa significancia y R² ajustado la capacidad explicativa."),
+            ("MSPSS", "Se conserva el resultado oficial agregado. El índice auxiliar individual es complementario y no equivale a los 12 reactivos MSPSS."),
+            ("WHOQOL-BREF", "Los dominios oficiales son físico, psicológico, relaciones sociales y entorno. El global es descriptivo."),
+            ("Spearman", "Rho mide asociación monotónica; p evalúa si la asociación observada es compatible con ausencia de relación."),
+            ("PLN", "La evaluación histórica y el módulo operativo se mantienen separados para preservar trazabilidad."),
+            ("Privacidad", "El PDF contiene únicamente resultados agregados y no permite reconstruir registros individuales."),
+            ("Reproducibilidad", "La versión y el hash abreviado permanecen discretamente en el pie para control técnico."),
+        ]
+        for idx, (label, body) in enumerate(notes):
+            col = idx % 2; row = idx // 2
+            _pdf_explanation(canvas, .055 + col*.455, .72 - row*.155, .42, .12, label, body, PALETTE[idx % len(PALETTE)])
+        pdf.savefig(fig)
+        plt.close(fig)
+
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 payload = load_dashboard_data()
@@ -1263,6 +1430,7 @@ elif page == "Uso y adherencia":
 
 # --------------------------- CORRELACIÓN / REGRESIÓN ---------------------------
 elif page == "Correlaciones y regresión":
+    st.info("Spearman se añade como análisis complementario; no sustituye ANCOVA, tamaños del efecto, regresión ni métricas del clasificador.")
     usage = frames["usage_participant"].copy()
     corr_calculated = calculate_spearman_results(usage)
     corr_canonical = frames["correlations"].copy()
@@ -1493,10 +1661,10 @@ elif page == "Metodología y calidad":
 
 # --------------------------- INFORME PDF ---------------------------
 else:
-    section("Informe visual de resultados")
+    section("Informe científico visual de resultados")
     st.markdown(
         "<div class='ng-method-note'><strong>Documento público y sintético.</strong> "
-        "El informe reúne las principales gráficas del dashboard con explicaciones breves para facilitar su lectura. "
+        "El informe conserva los bloques descriptivos e inferenciales del dashboard: ANCOVA, tamaños del efecto, Spearman, regresión y matriz de confusión, además de las gráficas principales. "
         "No incluye bases de datos, archivos estadísticos, tablas descargables ni registros individuales.</div>",
         unsafe_allow_html=True,
     )
@@ -1518,8 +1686,8 @@ else:
     )
 
     st.caption(
-        "Incluye síntesis general, DASS-21, MSPSS, WHOQOL-BREF, evolución temporal, "
-        "correlación de Spearman, analítica conversacional y notas metodológicas."
+        "Incluye síntesis general, DASS-21 descriptivo e inferencial, MSPSS, WHOQOL-BREF, uso, "
+        "Spearman, regresión, analítica conversacional, matriz de confusión, experiencia y notas metodológicas."
     )
 
 
