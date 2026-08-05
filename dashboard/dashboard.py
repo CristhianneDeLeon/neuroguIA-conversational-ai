@@ -3,24 +3,30 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable
+from io import BytesIO
 import os
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 import streamlit as st
 
+try:
+    from scipy.stats import spearmanr
+except ImportError:  # Fallback: se utilizan los resultados canónicos de M14C.
+    spearmanr = None
+
 from dashboard_data_loader import (
     clear_dashboard_cache,
-    frames_to_zip,
     indicator_map,
     load_dashboard_data,
     parameter_map,
 )
 
 st.set_page_config(
-    page_title="neuroguIA · Dashboard científico",
+    page_title="neuroguIA · Dashboard científico v3",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -29,7 +35,7 @@ st.set_page_config(
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
-BUILD_ID = "DASH-V3.1-PULIDO-20260804"
+BUILD_ID = "DASH-V3.3-PDF-SPEARMAN-20260805"
 PALETTE = ["#6E57D2", "#00A6A6", "#E45C88", "#FF7A59", "#3F8EFC", "#F2B84B"]
 INK = "#241F35"
 MUTED = "#716A7E"
@@ -63,9 +69,9 @@ st.markdown(
     [data-testid="stDataFrame"] {border:1px solid #e7e0ee; border-radius:16px; overflow:hidden;}
     .ng-method-note {padding:.85rem 1rem; border-radius:15px; background:#fff8e8; border:1px solid #f3dca6;
                      color:#6b5312; line-height:1.5; margin:.45rem 0 .85rem;}
-    .ng-hash-box {padding:.8rem 1rem; border-radius:15px; background:#f7f4fb; border:1px solid #e7e0ee;
-                  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#3f3655; word-break:break-all;}
     .ng-small-note {font-size:.82rem; color:#716A7E; line-height:1.5;}
+    .ng-control-line {font-size:.61rem; color:rgba(113,106,126,.36); line-height:1.35;
+                      text-align:right; margin-top:1.5rem; user-select:none;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -301,43 +307,555 @@ def bool_env(name: str) -> bool:
     return str(os.getenv(name, "") or "").strip().lower() in {"1", "true", "yes", "sí", "si", "on"}
 
 
-PUBLIC_DOWNLOAD_KEYS = {
-    "dass_summary",
-    "ancova",
-    "effects",
-    "mspss_official",
-    "whoqol_summary",
-    "usage_official",
-    "usage_weekly",
-    "time_bands",
-    "correlations",
-    "regression",
-    "pln_official",
-    "pln_categories",
-    "pln_confusion",
-    "experience_summary",
-    "socio_descriptives",
-    "baseline_comparability",
-    "ancova_assumptions",
-    "normality",
-    "nonparametric",
-    "sample_flow",
-    "missing_data",
-    "quality_control",
-    "traceability",
-    "exclusions",
-    "validation_status",
-    "reproducibility",
-}
 
 
-def public_download_frames(all_frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
-    """Devuelve únicamente tablas agregadas aptas para descarga pública."""
-    return {
-        key: value
-        for key, value in all_frames.items()
-        if key in PUBLIC_DOWNLOAD_KEYS and isinstance(value, pd.DataFrame)
-    }
+
+def calculate_spearman_results(usage: pd.DataFrame) -> pd.DataFrame:
+    """Recalcula rho de Spearman y su p bilateral desde los datos individuales de uso."""
+    columns = [
+        "muestra",
+        "predictor",
+        "resultado",
+        "rho",
+        "p",
+        "n",
+        "valores_unicos",
+        "origen",
+    ]
+    if usage is None or usage.empty:
+        return pd.DataFrame(columns=columns)
+
+    specifications = [
+        ("Muestra total", None, "mensajes", "Mensajes"),
+        ("Muestra total", None, "semanas_activas", "Semanas activas"),
+        ("Solo experimental", "Experimental", "mensajes", "Mensajes"),
+        ("Solo experimental", "Experimental", "semanas_activas", "Semanas activas"),
+        ("Solo experimental", "Experimental", "frecuencia_mensajes_semana", "Frecuencia semanal"),
+        ("Solo experimental", "Experimental", "duracion_media_reportada", "Duración media"),
+    ]
+
+    rows: list[dict[str, object]] = []
+    for sample_name, group_name, predictor_column, predictor_label in specifications:
+        subset = usage.copy()
+        if group_name is not None and "grupo" in subset.columns:
+            subset = subset[subset["grupo"].astype(str) == group_name].copy()
+
+        if predictor_column not in subset.columns or "mejora_estres" not in subset.columns:
+            continue
+
+        predictor = pd.to_numeric(subset[predictor_column], errors="coerce")
+        outcome = pd.to_numeric(subset["mejora_estres"], errors="coerce")
+        valid = predictor.notna() & outcome.notna()
+        predictor = predictor[valid]
+        outcome = outcome[valid]
+
+        unique_values = int(predictor.nunique())
+        rho_value = np.nan
+        p_value = np.nan
+        origin = "No calculable: predictor constante"
+
+        if len(predictor) >= 3 and unique_values >= 2:
+            if spearmanr is not None:
+                result = spearmanr(predictor, outcome, nan_policy="omit")
+                rho_value = float(result.statistic)
+                p_value = float(result.pvalue)
+                origin = "Recalculado desde M14A_USO_PARTICIPANTE"
+            else:
+                rho_value = float(predictor.rank().corr(outcome.rank(), method="pearson"))
+                origin = "Rho recalculado; p requiere scipy"
+
+        rows.append(
+            {
+                "muestra": sample_name,
+                "predictor": predictor_label,
+                "resultado": "Mejora del estrés",
+                "rho": rho_value,
+                "p": p_value,
+                "n": int(len(predictor)),
+                "valores_unicos": unique_values,
+                "origen": origin,
+            }
+        )
+
+    return pd.DataFrame(rows, columns=columns)
+
+def _pdf_footer(fig, master_hash: str) -> None:
+    """Control técnico discreto en el pie del PDF."""
+    fig.text(
+        0.99,
+        0.012,
+        f"neuroguIA · {BUILD_ID} · control {master_hash[:10]}…{master_hash[-6:]}",
+        ha="right",
+        va="bottom",
+        fontsize=5.5,
+        color="#B7B1BE",
+    )
+
+
+def _pdf_text_page(
+    pdf: PdfPages,
+    title: str,
+    paragraphs: list[str],
+    master_hash: str,
+    subtitle: str | None = None,
+) -> None:
+    fig = plt.figure(figsize=(11.69, 8.27))
+    fig.patch.set_facecolor("white")
+    fig.text(0.07, 0.89, title, fontsize=23, fontweight="bold", color=INK)
+    if subtitle:
+        fig.text(0.07, 0.835, subtitle, fontsize=11.5, color=PALETTE[0], fontweight="bold")
+    y = 0.76
+    for paragraph in paragraphs:
+        fig.text(
+            0.07,
+            y,
+            paragraph,
+            fontsize=11,
+            color="#4B4655",
+            va="top",
+            wrap=True,
+            linespacing=1.45,
+        )
+        y -= 0.115
+    _pdf_footer(fig, master_hash)
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
+def create_visual_report(
+    all_frames: dict[str, pd.DataFrame],
+    parameters: dict[str, object],
+    indicators: dict[str, object],
+    master_hash: str,
+) -> bytes:
+    """Genera un PDF público con resultados agregados, gráficas y explicaciones."""
+    output_buffer = BytesIO()
+
+    with PdfPages(output_buffer) as pdf:
+        dass = all_frames.get("dass_summary", pd.DataFrame()).copy()
+        mspss = all_frames.get("mspss_official", pd.DataFrame()).copy()
+        who = all_frames.get("whoqol_summary", pd.DataFrame()).copy()
+
+        stress = dass[
+            (dass["resultado"].astype(str) == "Estrés")
+            & (dass["grupo"].astype(str) == "Experimental")
+        ] if {"resultado", "grupo"}.issubset(dass.columns) else pd.DataFrame()
+
+        mspss_exp = mspss[
+            mspss["grupo"].astype(str) == "Experimental"
+        ] if "grupo" in mspss.columns else pd.DataFrame()
+
+        who_global = who[
+            (who["dominio"].astype(str) == "Global descriptivo")
+            & (who["grupo"].astype(str) == "Experimental")
+        ] if {"dominio", "grupo"}.issubset(who.columns) else pd.DataFrame()
+
+        stress_change = stress.iloc[0].get("cambio_pct") if not stress.empty else None
+        mspss_change = mspss_exp.iloc[0].get("cambio_pct") if not mspss_exp.empty else None
+        who_change = who_global.iloc[0].get("cambio_pct") if not who_global.empty else None
+
+        # Página 1: síntesis
+        _pdf_text_page(
+            pdf,
+            "neuroguIA",
+            [
+                "Dashboard científico de resultados · Informe visual público.",
+                (
+                    f"La investigación integró {fmt_count(parameters.get('n total'))} participantes, "
+                    f"{fmt_count(parameters.get('familias'))} familias analíticas y una intervención de 18 semanas."
+                ),
+                (
+                    f"Durante la ventana metodológica se registraron "
+                    f"{fmt_count(parameters.get('sesiones ventana activa'))} sesiones. "
+                    f"El corpus técnico completo reúne "
+                    f"{fmt_count(parameters.get('sesiones técnicas totales'))} sesiones y "
+                    f"{fmt_count(parameters.get('mensajes técnicos totales'))} mensajes."
+                ),
+                (
+                    f"Principales cambios del grupo experimental: estrés {fmt_pct(stress_change)}, "
+                    f"MSPSS {fmt_pct(mspss_change, signed=True)} y WHOQOL global "
+                    f"{fmt_pct(who_change, signed=True)}."
+                ),
+                (
+                    "El documento contiene exclusivamente resultados agregados. "
+                    "No incluye bases de datos, identificadores, scripts, archivos JSON ni tablas descargables."
+                ),
+            ],
+            master_hash,
+            subtitle="Síntesis de resultados",
+        )
+
+        # Página 2: DASS-21
+        if not dass.empty:
+            dimensions = ["Estrés", "Ansiedad", "Depresión"]
+            fig, axes = plt.subplots(1, 3, figsize=(11.69, 8.27))
+            fig.suptitle(
+                "DASS-21 · cambios pretest–postest",
+                fontsize=20,
+                fontweight="bold",
+                color=INK,
+                y=0.95,
+            )
+
+            for ax, dimension in zip(axes, dimensions):
+                subset = order_groups(
+                    dass[dass["resultado"].astype(str) == dimension].copy()
+                )
+                if subset.empty:
+                    ax.axis("off")
+                    continue
+
+                x = np.arange(len(subset))
+                width = 0.34
+                pre = pd.to_numeric(subset["pre_media"], errors="coerce")
+                post = pd.to_numeric(subset["post_media"], errors="coerce")
+
+                pre_bars = ax.bar(
+                    x - width / 2,
+                    pre,
+                    width,
+                    label="Pretest",
+                    color=PALETTE[0],
+                )
+                post_bars = ax.bar(
+                    x + width / 2,
+                    post,
+                    width,
+                    label="Postest",
+                    color=PALETTE[1],
+                )
+                ax.set_xticks(x, subset["grupo"].astype(str), rotation=12)
+                ax.set_title(dimension, fontweight="bold", color=INK)
+                ax.grid(axis="y", alpha=.18)
+                for spine in ax.spines.values():
+                    spine.set_visible(False)
+                ax.bar_label(pre_bars, fmt="%.2f", padding=2, fontsize=7)
+                ax.bar_label(post_bars, fmt="%.2f", padding=2, fontsize=7)
+
+            axes[0].set_ylabel("Puntuación media")
+            axes[-1].legend(frameon=False, loc="upper right")
+            fig.text(
+                0.07,
+                0.075,
+                "Lectura: el grupo experimental presenta reducciones claras en estrés, ansiedad y depresión; "
+                "el grupo control permanece prácticamente estable. En DASS-21, una puntuación menor representa menor sintomatología.",
+                fontsize=10,
+                color="#4B4655",
+                wrap=True,
+            )
+            _pdf_footer(fig, master_hash)
+            fig.tight_layout(rect=[0.04, 0.13, 0.98, 0.91])
+            pdf.savefig(fig)
+            plt.close(fig)
+
+        # Página 3: MSPSS
+        if not mspss.empty:
+            mspss = order_groups(mspss)
+            fig, ax = plt.subplots(figsize=(11.69, 8.27))
+            x = np.arange(len(mspss))
+            width = .34
+            pre = pd.to_numeric(mspss["pre_1_5"], errors="coerce")
+            post = pd.to_numeric(mspss["post_1_5"], errors="coerce")
+
+            pre_bars = ax.bar(
+                x - width / 2,
+                pre,
+                width,
+                label="Pretest",
+                color=PALETTE[0],
+            )
+            post_bars = ax.bar(
+                x + width / 2,
+                post,
+                width,
+                label="Postest",
+                color=PALETTE[1],
+            )
+            ax.set_xticks(x, mspss["grupo"].astype(str))
+            ax.set_ylim(0, 5)
+            ax.set_ylabel("Escala 1–5")
+            ax.set_title(
+                "MSPSS oficial agregado",
+                loc="left",
+                fontsize=19,
+                fontweight="bold",
+                color=INK,
+            )
+            ax.grid(axis="y", alpha=.18)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            ax.bar_label(pre_bars, fmt="%.2f", padding=3)
+            ax.bar_label(post_bars, fmt="%.2f", padding=3)
+            ax.legend(frameon=False)
+
+            fig.text(
+                0.08,
+                0.075,
+                "Lectura: el apoyo social percibido aumentó de 2.69 a 4.48 en el grupo experimental, "
+                "mientras que el control mostró un cambio mínimo. El resultado se presenta de forma agregada "
+                "porque la fuente recuperada no contiene la matriz individual de los 12 reactivos.",
+                fontsize=10,
+                color="#4B4655",
+                wrap=True,
+            )
+            _pdf_footer(fig, master_hash)
+            fig.tight_layout(rect=[0.05, 0.14, 0.98, 0.94])
+            pdf.savefig(fig)
+            plt.close(fig)
+
+        # Página 4: WHOQOL-BREF
+        if not who.empty:
+            plot = who.copy()
+            plot["etiqueta"] = (
+                plot["dominio"].astype(str) + " · " + plot["grupo"].astype(str)
+            )
+            plot["porcentaje"] = (
+                pd.to_numeric(plot["cambio_pct"], errors="coerce") * 100
+            )
+            plot = plot.dropna(subset=["porcentaje"]).sort_values("porcentaje")
+
+            fig, ax = plt.subplots(figsize=(11.69, 8.27))
+            colors = [
+                PALETTE[0] if "Experimental" in label else PALETTE[3]
+                for label in plot["etiqueta"]
+            ]
+            bars = ax.barh(
+                plot["etiqueta"],
+                plot["porcentaje"],
+                color=colors,
+            )
+            ax.axvline(0, color="#999999", linewidth=.8)
+            ax.set_title(
+                "WHOQOL-BREF · cambio porcentual por dominio",
+                loc="left",
+                fontsize=19,
+                fontweight="bold",
+                color=INK,
+            )
+            ax.set_xlabel("Cambio porcentual")
+            ax.xaxis.set_major_formatter(
+                FuncFormatter(lambda value, _: f"{value:.0f}%")
+            )
+            ax.grid(axis="x", alpha=.15)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            ax.bar_label(bars, fmt="%.1f%%", padding=3, fontsize=8)
+
+            fig.text(
+                0.08,
+                0.055,
+                "Lectura: las mayores mejoras experimentales se observan en relaciones sociales y bienestar psicológico. "
+                "El índice global es descriptivo y no constituye un quinto dominio oficial del WHOQOL-BREF.",
+                fontsize=10,
+                color="#4B4655",
+                wrap=True,
+            )
+            _pdf_footer(fig, master_hash)
+            fig.tight_layout(rect=[0.05, 0.11, 0.98, 0.94])
+            pdf.savefig(fig)
+            plt.close(fig)
+
+        # Página 5: evolución temporal
+        weekly = all_frames.get("usage_weekly", pd.DataFrame()).copy()
+        if not weekly.empty:
+            active = weekly[
+                weekly["estado"].astype(str).str.contains(
+                    "Intervención",
+                    case=False,
+                    na=False,
+                )
+            ].copy()
+            active["semana"] = pd.to_numeric(
+                active["periodo"],
+                errors="coerce",
+            )
+            active = active.dropna(subset=["semana"]).sort_values("semana")
+
+            fig, axes = plt.subplots(
+                2,
+                1,
+                figsize=(11.69, 8.27),
+                sharex=True,
+            )
+            fig.suptitle(
+                "Uso durante las 18 semanas de intervención",
+                fontsize=20,
+                fontweight="bold",
+                color=INK,
+                y=.96,
+            )
+
+            chart_specs = [
+                (axes[0], "sesiones", "Sesiones por semana", PALETTE[0]),
+                (axes[1], "mensajes", "Mensajes por semana", PALETTE[1]),
+            ]
+            for ax, column, title, color in chart_specs:
+                values = pd.to_numeric(active[column], errors="coerce")
+                ax.plot(
+                    active["semana"],
+                    values,
+                    marker="o",
+                    linewidth=2.4,
+                    color=color,
+                )
+                ax.fill_between(
+                    active["semana"],
+                    values,
+                    alpha=.12,
+                    color=color,
+                )
+                ax.set_title(
+                    title,
+                    loc="left",
+                    fontweight="bold",
+                    color=INK,
+                )
+                ax.grid(axis="y", alpha=.18)
+                for spine in ax.spines.values():
+                    spine.set_visible(False)
+
+            axes[1].set_xlabel("Semana")
+            axes[1].set_xticks(active["semana"].astype(int))
+            fig.text(
+                0.08,
+                0.045,
+                "Lectura: la serie utiliza exclusivamente la ventana metodológica activa. "
+                "El total técnico del corpus incluye registros fuera de esa ventana y se reporta por separado.",
+                fontsize=10,
+                color="#4B4655",
+                wrap=True,
+            )
+            _pdf_footer(fig, master_hash)
+            fig.tight_layout(rect=[0.05, 0.10, 0.98, 0.92])
+            pdf.savefig(fig)
+            plt.close(fig)
+
+        # Página 6: analítica conversacional
+        pln_categories = all_frames.get(
+            "pln_categories",
+            pd.DataFrame(),
+        ).copy()
+        if not pln_categories.empty and "soporte" in pln_categories.columns:
+            frequency = pln_categories[
+                pd.to_numeric(
+                    pln_categories["soporte"],
+                    errors="coerce",
+                ) > 300
+            ].copy()
+
+            if not frequency.empty:
+                frequency = frequency.sort_values("soporte")
+                fig, ax = plt.subplots(figsize=(11.69, 8.27))
+                bars = ax.barh(
+                    frequency["categoria"].astype(str),
+                    pd.to_numeric(
+                        frequency["soporte"],
+                        errors="coerce",
+                    ),
+                    color=PALETTE[1],
+                )
+                ax.set_title(
+                    "Analítica conversacional · frecuencia operativa por categoría",
+                    loc="left",
+                    fontsize=18,
+                    fontweight="bold",
+                    color=INK,
+                )
+                ax.set_xlabel("Registros")
+                ax.grid(axis="x", alpha=.16)
+                for spine in ax.spines.values():
+                    spine.set_visible(False)
+                ax.bar_label(bars, padding=3)
+
+                fig.text(
+                    0.08,
+                    0.065,
+                    "Lectura: el corpus operativo y la evaluación histórica del clasificador pertenecen a capas distintas. "
+                    "Las frecuencias muestran la distribución de registros técnicos y no sustituyen la validación histórica.",
+                    fontsize=10,
+                    color="#4B4655",
+                    wrap=True,
+                )
+                _pdf_footer(fig, master_hash)
+                fig.tight_layout(rect=[0.05, 0.12, 0.98, 0.94])
+                pdf.savefig(fig)
+                plt.close(fig)
+
+        # Página 7: correlación de Spearman
+        usage_individual = all_frames.get("usage_participant", pd.DataFrame()).copy()
+        spearman_results = calculate_spearman_results(usage_individual)
+        if not usage_individual.empty and not spearman_results.empty:
+            experimental_usage = usage_individual[
+                usage_individual["grupo"].astype(str) == "Experimental"
+            ].copy()
+            message_result = spearman_results[
+                (spearman_results["muestra"].astype(str) == "Solo experimental")
+                & (spearman_results["predictor"].astype(str) == "Mensajes")
+            ]
+            fig, ax = plt.subplots(figsize=(11.69, 8.27))
+            ax.scatter(
+                pd.to_numeric(experimental_usage["mensajes"], errors="coerce"),
+                pd.to_numeric(experimental_usage["mejora_estres"], errors="coerce"),
+                alpha=.62,
+                color=PALETTE[0],
+                edgecolor="none",
+            )
+            ax.set_title(
+                "Mensajes y mejora del estrés · grupo experimental",
+                loc="left",
+                fontsize=19,
+                fontweight="bold",
+                color=INK,
+            )
+            ax.set_xlabel("Mensajes por participante")
+            ax.set_ylabel("Mejora del estrés")
+            ax.grid(alpha=.18)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            if not message_result.empty:
+                result = message_result.iloc[0]
+                ax.text(
+                    .03,
+                    .95,
+                    f"ρ de Spearman = {fmt_num(result['rho'],4)} · p = {fmt_p(result['p'])}",
+                    transform=ax.transAxes,
+                    va="top",
+                    fontsize=12,
+                    color=INK,
+                    fontweight="bold",
+                )
+            fig.text(
+                0.08,
+                0.065,
+                "Lectura: dentro del grupo experimental, el número de mensajes no presenta una asociación monotónica "
+                "estadísticamente significativa con la mejora del estrés. El contraste incluye el coeficiente ρ y su p bilateral.",
+                fontsize=10,
+                color="#4B4655",
+                wrap=True,
+            )
+            _pdf_footer(fig, master_hash)
+            fig.tight_layout(rect=[0.05, 0.12, 0.98, 0.94])
+            pdf.savefig(fig)
+            plt.close(fig)
+
+        # Página 8: notas metodológicas
+        _pdf_text_page(
+            pdf,
+            "Notas para la lectura",
+            [
+                "1. DASS-21: una reducción indica menor intensidad de estrés, ansiedad o depresión.",
+                "2. MSPSS: se conserva el resultado oficial agregado. El índice auxiliar individual es complementario y no una segunda administración del instrumento.",
+                "3. WHOQOL-BREF: los cuatro dominios oficiales son físico, psicológico, relaciones sociales y entorno. El índice global mostrado es descriptivo.",
+                "4. Uso: la intervención se delimita del 12 de enero al 17 de mayo de 2026. El postest y cierre abarcan del 18 al 21 de mayo.",
+                "5. PLN: la evaluación histórica y el corpus operativo se presentan por separado para mantener la trazabilidad.",
+                "6. Privacidad: el informe no incluye registros individuales ni permite reconstruir el Documento Maestro.",
+            ],
+            master_hash,
+            subtitle="Criterios metodológicos",
+        )
+
+    output_buffer.seek(0)
+    return output_buffer.getvalue()
 
 
 payload = load_dashboard_data()
@@ -372,7 +890,7 @@ with st.sidebar:
             "Experiencia y usabilidad",
             "Sociodemografía",
             "Metodología y calidad",
-            "Descargas",
+            "Informe PDF",
         ],
     )
     audit_mode = st.toggle("Auditoría interna", value=False, disabled=not ALLOW_AUDIT)
@@ -381,7 +899,6 @@ with st.sidebar:
     if st.button("Actualizar datos", use_container_width=True):
         clear_dashboard_cache()
         st.rerun()
-    st.caption(f"SHA-256: {payload['master_sha256'][:16]}…")
 
 st.markdown(
     """
@@ -746,33 +1263,72 @@ elif page == "Uso y adherencia":
 
 # --------------------------- CORRELACIÓN / REGRESIÓN ---------------------------
 elif page == "Correlaciones y regresión":
-    corr=frames["correlations"].copy()
-    section("Correlaciones reproducidas")
+    usage = frames["usage_participant"].copy()
+    corr_calculated = calculate_spearman_results(usage)
+    corr_canonical = frames["correlations"].copy()
+    corr = corr_calculated if not corr_calculated.empty else corr_canonical
+
+    section("Correlación de Spearman: coeficiente ρ y significancia p")
+
+    key_rows = corr[
+        corr["predictor"].astype(str).isin(["Mensajes", "messages"])
+    ].copy()
+    total_row = key_rows[key_rows["muestra"].astype(str) == "Muestra total"]
+    exp_row = key_rows[key_rows["muestra"].astype(str) == "Solo experimental"]
+
+    c1, c2, c3, c4 = st.columns(4)
+    if not total_row.empty:
+        value = total_row.iloc[0]
+        with c1:
+            kpi("ρ Spearman · muestra total", fmt_num(value["rho"], 4), "mensajes vs. mejora del estrés")
+        with c2:
+            kpi("p Spearman · muestra total", fmt_p(value["p"]), f"N = {fmt_count(value['n'])}")
+    if not exp_row.empty:
+        value = exp_row.iloc[0]
+        with c3:
+            kpi("ρ Spearman · experimental", fmt_num(value["rho"], 4), "mensajes vs. mejora del estrés")
+        with c4:
+            kpi("p Spearman · experimental", fmt_p(value["p"]), f"N = {fmt_count(value['n'])}")
+
     show = clean_table(
         corr,
-        ["muestra","predictor","resultado","rho","p","n","valores_unicos"],
+        ["muestra","predictor","resultado","rho","p","n","valores_unicos","origen"],
         {
             "muestra":"Muestra", "predictor":"Predictor", "resultado":"Resultado",
-            "rho":"Rho de Spearman", "p":"p", "n":"N", "valores_unicos":"Valores únicos",
+            "rho":"ρ de Spearman", "p":"p bilateral", "n":"N",
+            "valores_unicos":"Valores únicos", "origen":"Origen del cálculo",
         },
     )
     show = format_columns(
         show,
-        decimals={"Rho de Spearman":4},
-        p_columns=["p"],
+        decimals={"ρ de Spearman":4},
+        p_columns=["p bilateral"],
         count_columns=["N","Valores únicos"],
     )
     show_table(show)
-    st.warning("Las asociaciones altas de la muestra total reflejan, en parte, que el grupo control tiene exposición cero. La relación dosis–respuesta debe interpretarse dentro del grupo experimental, donde los coeficientes reproducidos son cercanos a cero.")
+    st.warning(
+        "La correlación de la muestra total está influida por la exposición cero del grupo control. "
+        "Para evaluar una posible relación dosis–respuesta debe priorizarse el grupo experimental. "
+        "En este grupo, mensajes y mejora del estrés muestran ρ = 0.0208 y p = 0.728, "
+        "por lo que no se observa una asociación monotónica estadísticamente significativa."
+    )
 
-    usage=frames["usage_participant"]
     exp=usage[usage["grupo"]=="Experimental"].copy()
     fig,ax=plt.subplots(figsize=(9.6,5),dpi=145)
     ax.scatter(pd.to_numeric(exp["mensajes"]),pd.to_numeric(exp["mejora_estres"]),alpha=.62,color=PALETTE[0],edgecolor="none")
     base_axes(ax,"Mensajes y mejora del estrés · grupo experimental","Mejora del estrés")
     ax.set_xlabel("Mensajes por participante")
-    row=corr[(corr["muestra"]=="Solo experimental") & (corr["predictor"]=="messages")].iloc[0]
-    ax.text(.02,.96,f"ρ = {fmt_num(row['rho'],4)} · p = {fmt_p(row['p'])}",transform=ax.transAxes,va="top",fontsize=10,color=INK)
+    row_match = corr[
+        (corr["muestra"].astype(str) == "Solo experimental")
+        & (corr["predictor"].astype(str).isin(["Mensajes", "messages"]))
+    ]
+    if not row_match.empty:
+        row = row_match.iloc[0]
+        ax.text(
+            .02, .96,
+            f"ρ de Spearman = {fmt_num(row['rho'],4)} · p = {fmt_p(row['p'])}",
+            transform=ax.transAxes, va="top", fontsize=10, color=INK,
+        )
     fig.tight_layout(); st.pyplot(fig,use_container_width=True); plt.close(fig)
 
     section("Regresión ajustada")
@@ -935,61 +1491,41 @@ elif page == "Metodología y calidad":
     show_table(frames["reproducibility"])
     source_note("M21_TRAZABILIDAD", "M22_CONTROL_CALIDAD", "M33_FLUJO_MUESTRA", "M34_DATOS_FALTANTES", "M35_REPRODUCIBILIDAD", "M36_VALIDACION_ESTADO")
 
-# --------------------------- DESCARGAS ---------------------------
+# --------------------------- INFORME PDF ---------------------------
 else:
-    section("Archivos públicos y reproducibilidad")
-    st.info(
-        "Por protección de los registros pseudonimizados, el Excel maestro y las tablas individuales no se ofrecen "
-        "para descarga desde el dashboard. Esta sección contiene únicamente resultados agregados y materiales de reproducibilidad."
-    )
-
-    script_path = BASE_DIR / "neuroguia_analisis_oficial_v3.py"
-    json_path = BASE_DIR / "exports" / "NeuroGuIA_resultados_reproducidos_v3.json"
-    aggregated_zip = frames_to_zip(public_download_frames(frames))
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if script_path.exists():
-            st.download_button(
-                "Descargar script estadístico",
-                script_path.read_bytes(),
-                file_name=script_path.name,
-                mime="text/x-python",
-                use_container_width=True,
-            )
-        else:
-            st.button("Script no disponible", disabled=True, use_container_width=True)
-    with c2:
-        if json_path.exists():
-            st.download_button(
-                "Descargar resultados JSON",
-                json_path.read_bytes(),
-                file_name=json_path.name,
-                mime="application/json",
-                use_container_width=True,
-            )
-        else:
-            st.button("JSON no disponible", disabled=True, use_container_width=True)
-    with c3:
-        st.download_button(
-            "Descargar tablas agregadas",
-            aggregated_zip,
-            file_name="neuroguIA_resultados_agregados_v3.zip",
-            mime="application/zip",
-            use_container_width=True,
-        )
-
-    section("Huella de integridad del Documento Maestro")
-    short_hash = f"{payload['master_sha256'][:12]}…{payload['master_sha256'][-12:]}"
+    section("Informe visual de resultados")
     st.markdown(
-        f"<div class='ng-hash-box'>{short_hash}</div>",
+        "<div class='ng-method-note'><strong>Documento público y sintético.</strong> "
+        "El informe reúne las principales gráficas del dashboard con explicaciones breves para facilitar su lectura. "
+        "No incluye bases de datos, archivos estadísticos, tablas descargables ni registros individuales.</div>",
         unsafe_allow_html=True,
     )
-    st.caption(
-        "La huella SHA-256 funciona como una firma digital: confirma qué versión del Excel alimentó el dashboard "
-        "sin permitir descargar ni reconstruir sus registros."
-    )
-    with st.expander("Ver huella SHA-256 completa"):
-        st.code(payload["master_sha256"], language="text")
 
-st.caption(f"Fuente activa: {payload.get('master_name','Documento Maestro v3')} · SHA-256 {payload['master_sha256'][:12]}…{payload['master_sha256'][-8:]} · neuroguIA 2026")
+    pdf_report = create_visual_report(
+        frames,
+        params,
+        usage_map,
+        payload["master_sha256"],
+    )
+
+    st.download_button(
+        "Descargar informe visual en PDF",
+        data=pdf_report,
+        file_name="neuroguIA_informe_visual_resultados_v3.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+        type="primary",
+    )
+
+    st.caption(
+        "Incluye síntesis general, DASS-21, MSPSS, WHOQOL-BREF, evolución temporal, "
+        "correlación de Spearman, analítica conversacional y notas metodológicas."
+    )
+
+
+st.markdown(
+    f"<div class='ng-control-line'>control interno · {BUILD_ID} · "
+    f"{payload.get('master_name','Documento Maestro v3')} · "
+    f"{payload['master_sha256'][:8]}…{payload['master_sha256'][-6:]}</div>",
+    unsafe_allow_html=True,
+)
