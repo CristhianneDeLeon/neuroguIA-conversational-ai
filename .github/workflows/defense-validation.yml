@@ -1,0 +1,48 @@
+name: neuroguIA Defense Validation
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - defensa-2026
+
+jobs:
+  validate:
+    name: Validate thesis-aligned implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Compile Python source
+        run: |
+          python -m compileall app.py core memory database scripts
+
+      - name: Run defense validation
+        run: |
+          python scripts/run_defense_checks.py
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neuroguIA-defense-validation
+          path: validation_outputs/
+          if-no-files-found: warn
