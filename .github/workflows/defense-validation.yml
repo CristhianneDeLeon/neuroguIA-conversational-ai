@@ -35,6 +35,10 @@ jobs:
         run: |
           python -m compileall app.py core memory database scripts
 
+      - name: Audit Supabase persistence
+        run: |
+          python scripts/audit_supabase_persistence.py
+
       - name: Run defense validation
         run: |
           python scripts/run_defense_checks.py
