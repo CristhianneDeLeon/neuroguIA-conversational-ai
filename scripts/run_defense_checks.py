@@ -48,6 +48,10 @@ CHECKS = [
         "scripts/validate_thesis_contract.py",
     ),
     (
+        "supabase_bridge_contract",
+        "scripts/validate_supabase_bridge_contract.py",
+    ),
+    (
         "functional_support",
         "scripts/validate_functional_support.py",
     ),
