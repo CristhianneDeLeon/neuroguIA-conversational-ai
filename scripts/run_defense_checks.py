@@ -60,6 +60,10 @@ CHECKS = [
         "scripts/validate_routine_delivery.py",
     ),
     (
+        "routine_persistence",
+        "scripts/validate_routine_persistence.py",
+    ),
+    (
         "gateway_contract",
         "scripts/validate_gateway_contract.py",
     ),
@@ -68,7 +72,6 @@ CHECKS = [
         "scripts/validate_conversation_continuity.py",
     ),
 ]
-
 
 def run_check(
     name: str,
