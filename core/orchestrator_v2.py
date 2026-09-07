@@ -2705,6 +2705,365 @@ class NeuroGuiaOrchestratorV2:
                 "routine_id": None,
             }
 
+
+    def _is_routine_recall_request(self, message: str) -> bool:
+        """Detecta una petición explícita para recuperar una rutina ya guardada.
+
+        La detección es deliberadamente conservadora para no confundir una
+        solicitud de rutina nueva con una recuperación de memoria. Las rutas
+        de seguridad siempre tienen prioridad cuando existe una señal explícita
+        de escalada o riesgo.
+        """
+
+        normalized = self._normalize_followup_text(message)
+        if not normalized:
+            return False
+
+        if _stable_demo_explicit_escalation(normalized):
+            return False
+
+        routine_markers = [
+            "rutina",
+            "rutinas",
+            "plan",
+            "pasos",
+        ]
+        recall_markers = [
+            "recuerdas",
+            "recuerda",
+            "recordar",
+            "guardamos",
+            "guardada",
+            "guardado",
+            "hicimos",
+            "habíamos hecho",
+            "habiamos hecho",
+            "cual era",
+            "cuál era",
+            "muestrame",
+            "muéstrame",
+            "dame la rutina",
+            "quiero retomar",
+            "retomar la rutina",
+            "volver a ver",
+            "ver otra vez",
+        ]
+
+        has_routine_marker = any(marker in normalized for marker in routine_markers)
+        has_recall_marker = any(marker in normalized for marker in recall_markers)
+
+        return bool(has_routine_marker and has_recall_marker)
+
+    def _select_recalled_routine(
+        self,
+        message: str,
+        family_id: Optional[str],
+        profile_id: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        """Selecciona la rutina activa más pertinente dentro del perfil activo."""
+
+        if not family_id or not profile_id:
+            return None
+
+        routines = self.routine_memory.list_active_routines(
+            family_id=family_id,
+            profile_id=profile_id,
+            limit=20,
+        )
+
+        if not routines:
+            return None
+
+        normalized_message = self._normalize_followup_text(message)
+        message_tokens = {
+            token
+            for token in normalized_message.split()
+            if len(token) >= 4
+        }
+
+        def score(routine: Dict[str, Any]) -> tuple[int, str]:
+            searchable = self._normalize_followup_text(
+                " ".join(
+                    [
+                        str(routine.get("routine_name") or ""),
+                        str(routine.get("routine_type") or ""),
+                        str(routine.get("goal") or ""),
+                    ]
+                )
+            )
+            searchable_tokens = {
+                token
+                for token in searchable.split()
+                if len(token) >= 4
+            }
+            overlap = len(message_tokens.intersection(searchable_tokens))
+
+            name = self._normalize_followup_text(
+                str(routine.get("routine_name") or "")
+            )
+            type_text = self._normalize_followup_text(
+                str(routine.get("routine_type") or "")
+            )
+
+            weighted = overlap
+            if name and name in normalized_message:
+                weighted += 6
+            if type_text and type_text in normalized_message:
+                weighted += 4
+
+            updated_at = str(routine.get("updated_at") or routine.get("created_at") or "")
+            return weighted, updated_at
+
+        ranked = sorted(
+            routines,
+            key=score,
+            reverse=True,
+        )
+
+        return ranked[0]
+
+    def _format_recalled_routine_response(
+        self,
+        routine: Dict[str, Any],
+        active_profile: Optional[Dict[str, Any]],
+    ) -> str:
+        """Convierte una rutina persistida en una respuesta conversacional clara."""
+
+        alias = str((active_profile or {}).get("alias") or "este perfil").strip()
+        routine_name = str(routine.get("routine_name") or "Rutina guardada").strip()
+        goal = str(routine.get("goal") or "").strip()
+        steps = list(routine.get("steps") or [])
+        short_version = list(routine.get("short_version") or [])
+        adjustments = list(routine.get("adjustments") or [])
+        followup_question = str(routine.get("followup_question") or "").strip()
+
+        lines: List[str] = [
+            f"Sí. Tengo guardada para {alias} la **{routine_name}**."
+        ]
+
+        if goal:
+            lines.append(f"\n**Objetivo:** {goal}")
+
+        display_steps = steps or short_version
+        if display_steps:
+            lines.append("\n**Pasos:**")
+            for index, step in enumerate(display_steps, start=1):
+                text = str(step or "").strip()
+                if text:
+                    lines.append(f"{index}. {text}")
+
+        if adjustments:
+            lines.append("\n**Ajustes guardados:**")
+            for adjustment in adjustments[:4]:
+                text = str(adjustment or "").strip()
+                if text:
+                    lines.append(f"- {text}")
+
+        if followup_question:
+            lines.append(f"\n{followup_question}")
+        else:
+            lines.append("\nSi quieres, podemos modificarla sin empezar desde cero.")
+
+        return "\n".join(lines).strip()
+
+    def _build_routine_recall_process_result(
+        self,
+        message: str,
+        effective_message: str,
+        active_profile: Optional[Dict[str, Any]],
+        unit_context: Dict[str, Any],
+        previous_frame: Dict[str, Any],
+        context_override: Dict[str, Any],
+        user_context_payload: Dict[str, Any],
+        user_context_store_result: Dict[str, Any],
+        conversation_curation_result: Dict[str, Any],
+        session_scope_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """Recupera una rutina persistida y construye una respuesta directa."""
+
+        effective_family_id = (
+            (active_profile or {}).get("family_id")
+            or unit_context.get("family_id")
+        )
+        effective_profile_id = (active_profile or {}).get("profile_id")
+
+        routine = self._select_recalled_routine(
+            message=effective_message,
+            family_id=effective_family_id,
+            profile_id=effective_profile_id,
+        )
+
+        if not effective_profile_id:
+            response_text = (
+                "Para recuperar una rutina necesito que selecciones primero el perfil correspondiente. "
+                "Así evito mezclar rutinas entre personas de la misma familia."
+            )
+            retrieval_result = {
+                "found": False,
+                "reason": "missing_profile_context",
+                "routine_id": None,
+            }
+            routine_payload: Dict[str, Any] = {}
+        elif routine is None:
+            alias = str((active_profile or {}).get("alias") or "este perfil").strip()
+            response_text = (
+                f"No encuentro una rutina activa guardada para {alias}. "
+                "Si quieres, podemos crear una nueva sin asumir datos de otro perfil."
+            )
+            retrieval_result = {
+                "found": False,
+                "reason": "no_active_routine",
+                "routine_id": None,
+            }
+            routine_payload = {}
+        else:
+            response_text = self._format_recalled_routine_response(
+                routine=routine,
+                active_profile=active_profile,
+            )
+            retrieval_result = {
+                "found": True,
+                "reason": "retrieved",
+                "routine_id": routine.get("routine_id"),
+                "routine_type": routine.get("routine_type"),
+            }
+            routine_payload = dict(routine)
+
+        category_analysis = {
+            "detected_category": "rutinas_habitos",
+            "confidence": 1.0,
+            "source": "routine_memory_recall",
+        }
+        state_analysis = {
+            "primary_state": "supportive",
+            "secondary_states": [],
+            "detected_states": [],
+            "followup_needed": False,
+            "source": "routine_memory_recall",
+        }
+        intent_analysis = {
+            "detected_intent": "recuperar_rutina",
+            "confidence": 1.0,
+            "source": "routine_memory_recall",
+        }
+        conversation_frame = {
+            "source_message": message,
+            "effective_message": effective_message,
+            "conversation_domain": "rutinas_habitos",
+            "conversation_phase": "routine_recall",
+            "turn_type": "routine_recall",
+            "turn_family": "routine_recall",
+            "context_override": context_override,
+            "family_id": effective_family_id,
+            "profile_id": effective_profile_id,
+            "active_profile_alias": (active_profile or {}).get("alias"),
+            "session_scope_id": session_scope_id,
+            "last_routine_type": routine_payload.get("routine_type"),
+            "last_routine_id": routine_payload.get("routine_id"),
+            "routine_retrieval_result": retrieval_result,
+        }
+        conversation_control = {
+            "response_source": "routine_memory_recall",
+            "turn_type": "routine_recall",
+            "turn_family": "routine_recall",
+            "llm_writer_requested": False,
+            "llm_writer_used": False,
+            "llm_provider": None,
+            "llm_block_reason": "direct_persistent_memory_recall",
+            "llm_curator_status": "not_required",
+            "model_used": None,
+        }
+        response_package = {
+            "mode": "system_generated",
+            "response": response_text,
+            "text": response_text,
+            "response_source": "routine_memory_recall",
+            "response_metadata": {
+                "source": "routine_memory_recall",
+                "response_source": "routine_memory_recall",
+                "routine_retrieved": bool(retrieval_result.get("found")),
+                "routine_id": retrieval_result.get("routine_id"),
+                "routine_type": retrieval_result.get("routine_type"),
+                "active_profile_alias": (active_profile or {}).get("alias"),
+            },
+        }
+
+        return {
+            "case_id": None,
+            "case_memory_store_result": {
+                "stored": False,
+                "reason": "retrieval_only",
+                "case_id": None,
+            },
+            "stored_response_id": None,
+            "curated_llm_response_id": None,
+            "learning_payload": None,
+            "learning_store_result": None,
+            "family_id": effective_family_id,
+            "profile_id": effective_profile_id,
+            "unit_context": unit_context,
+            "active_profile": active_profile,
+            "exceptionality_analysis": self._empty_exceptionality_analysis(),
+            "support_plan": self._empty_support_plan(),
+            "conversation_control": conversation_control,
+            "conversation_frame": conversation_frame,
+            "conversational_intent": intent_analysis,
+            "expert_adaptation_plan": {},
+            "state_analysis": state_analysis,
+            "category_analysis": category_analysis,
+            "intent_analysis": intent_analysis,
+            "detected_category": "rutinas_habitos",
+            "emotional_state": "supportive",
+            "memory_summary": {},
+            "memory_payload": {
+                "retrieved_routine": routine_payload,
+            },
+            "user_context_payload": user_context_payload,
+            "user_context_store_result": user_context_store_result,
+            "response_memory_payload": {},
+            "stage_result": {
+                "stage": "routine_recall",
+                "conversation_phase": "routine_recall",
+                "should_close_with_followup": False,
+            },
+            "stage_hints": {},
+            "routine_payload": routine_payload,
+            "routine_retrieval_result": retrieval_result,
+            "functional_analysis": {
+                "functional_category": "rutinas_habitos",
+                "functional_category_label": "Rutinas y hábitos",
+                "functional_category_purpose": "recuperar y dar continuidad a rutinas previamente guardadas",
+                "confidence": 1.0,
+            },
+            "routine_activation": {
+                "should_generate": False,
+                "reason": "existing_routine_retrieved",
+            },
+            "confidence_payload": {
+                "overall_confidence": 1.0,
+                "source": "routine_memory_recall",
+            },
+            "decision_payload": {
+                "decision_mode": "routine_memory_recall",
+                "selected_routine_type": routine_payload.get("routine_type"),
+            },
+            "fallback_payload": {
+                "use_llm": False,
+                "fallback_reason": "direct_persistent_memory_recall",
+            },
+            "llm_policy": {
+                "should_use_llm": False,
+                "reason": "direct_persistent_memory_recall",
+            },
+            "llm_request_payload": None,
+            "llm_result": None,
+            "llm_curated_payload": None,
+            "conversation_curation_result": conversation_curation_result,
+            "session_scope_id": session_scope_id,
+            "response_package": response_package,
+            "previous_frame": previous_frame,
+        }
+
     # =========================================================
     # API PRINCIPAL
     # =========================================================
@@ -2827,6 +3186,28 @@ class NeuroGuiaOrchestratorV2:
                 conversation_curation_result=conversation_curation_result,
                 session_scope_id=session_scope_id,
                 chat_history=chat_history,
+            )
+
+
+        # -----------------------------------------------------
+        # 1.2) RECUPERACIÓN CONVERSACIONAL DE RUTINA PERSISTIDA
+        # -----------------------------------------------------
+        # Se resuelve antes de las rutas stable_demo para que una petición
+        # explícita de memoria no sea interpretada como generación de una
+        # rutina nueva. Las señales de riesgo conservan prioridad porque
+        # _is_routine_recall_request() las excluye deliberadamente.
+        if self._is_routine_recall_request(effective_message):
+            return self._build_routine_recall_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
             )
 
         conversational_repair = resolve_conversational_repair(
