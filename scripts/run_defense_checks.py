@@ -72,6 +72,10 @@ CHECKS = [
         "scripts/validate_routine_conversational_recall.py",
     ),
     (
+        "routine_conversational_update",
+        "scripts/validate_routine_conversational_update.py",
+    ),
+    (
         "gateway_contract",
         "scripts/validate_gateway_contract.py",
     ),
