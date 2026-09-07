@@ -30,7 +30,7 @@ from memory.conversation_curation import ConversationCuration
 from memory.response_memory import ResponseMemory
 from memory.profile_manager import ProfileManager
 from memory.user_context_memory import UserContextMemory
-
+from memory.routine_memory import RoutineMemory
 
 STABLE_DEMO_STEPS: Dict[str, List[str]] = {
     route_id: list(interventions.values())
