@@ -1,5 +1,1 @@
-self.case_memory = CaseMemory(db_path=db_path)
-self.response_memory = ResponseMemory(db_path=db_path)
-self.user_context_memory = UserContextMemory(db_path=db_path)
-self.routine_memory = RoutineMemory(db_path=db_path)
-self.conversation_curation = ConversationCuration(db_path=db_path)
+
