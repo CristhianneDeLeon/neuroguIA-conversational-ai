@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Valida modificación conversacional de una rutina persistida entre sesiones.
+"""Valida recuperación conversacional de rutinas entre sesiones.
 
 Prueba el flujo:
 solicitud de rutina -> persistencia -> cierre de sesión -> nueva sesión
--> orden explícita de modificación -> actualización del mismo registro
--> recuperación del cambio -> aislamiento por perfil.
+-> petición explícita de recuerdo -> recuperación del mismo registro.
 
 Usa únicamente SQLite temporal y datos ficticios.
 No utiliza Supabase, OpenAI real, credenciales ni datos de participantes.
@@ -26,14 +25,13 @@ if str(ROOT) not in sys.path:
 from core.orchestrator_v2 import NeuroGuiaOrchestratorV2
 from database.database import initialize_database
 from memory.profile_manager import ProfileManager
-from memory.routine_memory import RoutineMemory
 
 
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(
             Path(tmpdir)
-            / "routine_conversational_update.db"
+            / "routine_conversational_recall.db"
         )
 
         # =====================================================
@@ -60,7 +58,7 @@ def main() -> int:
                 caregiver_alias="Familia de validación",
                 context_notes=(
                     "Contexto ficticio para prueba "
-                    "de modificación conversacional."
+                    "de recuperación conversacional."
                 ),
                 support_network="Red ficticia",
                 environmental_factors=None,
@@ -132,7 +130,7 @@ def main() -> int:
                 profile_id=profile_id,
                 extra_context={
                     "session_scope_id":
-                        "defense-routine-update-session-1"
+                        "defense-routine-recall-session-1"
                 },
                 chat_history=[],
                 use_llm_stub=True,
@@ -159,21 +157,18 @@ def main() -> int:
                 first_store.get("routine_id")
                 or ""
             ).strip()
+            routine_name = str(
+                first_payload.get("routine_name")
+                or ""
+            ).strip()
             first_steps = list(
                 first_payload.get("steps")
                 or []
             )
 
             assert routine_id
-            assert first_steps, (
-                "La rutina inicial no contiene pasos."
-            )
-
-            original_first_step = str(
-                first_steps[0]
-                or ""
-            ).strip()
-            assert original_first_step
+            assert routine_name
+            assert first_steps
 
         finally:
             first_orchestrator.close()
@@ -181,56 +176,61 @@ def main() -> int:
         print("Sesión 1: rutina generada y persistida: OK")
 
         # =====================================================
-        # 4. SESIÓN 2: MODIFICACIÓN CONVERSACIONAL
+        # 4. SESIÓN 2: RECUPERACIÓN CONVERSACIONAL
         # =====================================================
-
-        replacement = "Revisar la mochila antes de salir"
 
         second_orchestrator = NeuroGuiaOrchestratorV2(
             db_path=db_path
         )
 
         try:
-            update_result = second_orchestrator.process_message(
+            recall_result = second_orchestrator.process_message(
                 message=(
-                    "Cambia el primer paso de esa rutina por "
-                    f"{replacement}."
+                    "¿Recuerdas la rutina que hicimos "
+                    "para las mañanas de Leo? Muéstrame la rutina."
                 ),
                 family_id=family_id,
                 profile_id=profile_id,
                 extra_context={
                     "session_scope_id":
-                        "defense-routine-update-session-2"
+                        "defense-routine-recall-session-2"
                 },
                 chat_history=[],
                 use_llm_stub=True,
                 auto_save_case=True,
             )
 
-            routine_update = (
-                update_result.get(
-                    "routine_update_result"
+            retrieval = (
+                recall_result.get(
+                    "routine_retrieval_result"
                 )
                 or {}
             )
 
-            assert routine_update.get("updated") is True, (
-                "La nueva sesión no modificó la rutina persistida. "
-                f"Resultado: {routine_update}"
+            assert retrieval.get("found") is True, (
+                "La nueva sesión no recuperó la rutina persistida. "
+                f"Resultado: {retrieval}"
             )
 
             assert (
-                str(routine_update.get("routine_id") or "")
+                str(retrieval.get("routine_id") or "")
                 == routine_id
             ), (
-                "La modificación se aplicó sobre una rutina distinta."
+                "Se recuperó una rutina distinta."
             )
 
-            assert routine_update.get("step_number") == 1
-            assert routine_update.get("replacement") == replacement
+            recalled_payload = (
+                recall_result.get("routine_payload")
+                or {}
+            )
+
+            assert (
+                recalled_payload.get("routine_id")
+                == routine_id
+            )
 
             response_package = (
-                update_result.get("response_package")
+                recall_result.get("response_package")
                 or {}
             )
             response_text = str(
@@ -240,70 +240,44 @@ def main() -> int:
             ).strip()
 
             assert response_text, (
-                "La modificación no produjo respuesta visible."
+                "La recuperación no produjo respuesta visible."
             )
-            assert replacement in response_text, (
-                "La respuesta no confirma el nuevo paso."
+
+            assert routine_name in response_text, (
+                "La respuesta no muestra el nombre "
+                "de la rutina recuperada."
+            )
+
+            first_step = str(first_steps[0] or "").strip()
+            assert first_step in response_text, (
+                "La respuesta no muestra los pasos "
+                "de la rutina persistida."
             )
 
             metadata = (
                 response_package.get("response_metadata")
                 or {}
             )
+
             assert (
                 metadata.get("response_source")
-                == "routine_memory_update"
+                == "routine_memory_recall"
             )
-            assert metadata.get("routine_updated") is True
+
+            assert (
+                metadata.get("routine_retrieved")
+                is True
+            )
 
         finally:
             second_orchestrator.close()
 
-        print("Sesión 2: modificación conversacional: OK")
-        print("Mismo routine_id después del cambio: OK")
+        print("Sesión 2: recuperación conversacional: OK")
+        print("Mismo routine_id entre sesiones: OK")
+        print("Rutina visible en respuesta: OK")
 
         # =====================================================
-        # 5. SESIÓN 3: COMPROBAR PERSISTENCIA DEL CAMBIO
-        # =====================================================
-
-        routine_memory = RoutineMemory(
-            db_path=db_path,
-            backend="sqlite",
-        )
-
-        try:
-            persisted = routine_memory.get_routine(
-                routine_id
-            )
-
-            assert persisted is not None, (
-                "La rutina modificada no pudo recuperarse."
-            )
-
-            persisted_steps = list(
-                persisted.get("steps")
-                or []
-            )
-
-            assert persisted_steps, (
-                "La rutina modificada perdió sus pasos."
-            )
-
-            assert persisted_steps[0] == replacement, (
-                "El cambio conversacional no quedó persistido."
-            )
-
-            assert persisted_steps[0] != original_first_step, (
-                "El primer paso no cambió realmente."
-            )
-
-        finally:
-            routine_memory.close()
-
-        print("Persistencia del cambio entre sesiones: OK")
-
-        # =====================================================
-        # 6. AISLAMIENTO: OTRO PERFIL NO PUEDE MODIFICARLA
+        # 5. AISLAMIENTO: OTRO PERFIL NO PUEDE RECUPERARLA
         # =====================================================
 
         other_orchestrator = NeuroGuiaOrchestratorV2(
@@ -313,55 +287,57 @@ def main() -> int:
         try:
             other_result = other_orchestrator.process_message(
                 message=(
-                    "Cambia el primer paso de esa rutina por "
-                    "Este cambio no debe aplicarse."
+                    "¿Recuerdas la rutina que guardamos? "
+                    "Muéstrame la rutina."
                 ),
                 family_id=family_id,
                 profile_id=other_profile_id,
                 extra_context={
                     "session_scope_id":
-                        "defense-routine-update-session-other"
+                        "defense-routine-recall-session-other"
                 },
                 chat_history=[],
                 use_llm_stub=True,
                 auto_save_case=True,
             )
 
-            other_update = (
+            other_retrieval = (
                 other_result.get(
-                    "routine_update_result"
+                    "routine_retrieval_result"
                 )
                 or {}
             )
 
-            assert other_update.get("updated") is False, (
-                "Un perfil distinto logró modificar la rutina."
+            assert (
+                other_retrieval.get("found")
+                is False
+            ), (
+                "Una rutina fue recuperada desde un perfil "
+                "al que no pertenece."
             )
 
             assert (
-                other_update.get("reason")
+                other_retrieval.get("reason")
                 == "no_active_routine"
             )
 
         finally:
             other_orchestrator.close()
 
-        print("Aislamiento de modificación por perfil: OK")
+        print("Aislamiento conversacional por perfil: OK")
 
         # =====================================================
         # RESULTADO
         # =====================================================
 
         print()
-        print("ROUTINE_CONVERSATIONAL_UPDATE_OK")
+        print("ROUTINE_CONVERSATIONAL_RECALL_OK")
         print(
-            "Generación → persistencia → nueva sesión → "
-            "modificación conversacional → persistencia del cambio "
-            "→ aislamiento: OK"
+            "Generación → persistencia → nueva sesión "
+            "→ recuerdo conversacional → aislamiento: OK"
         )
 
         return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
