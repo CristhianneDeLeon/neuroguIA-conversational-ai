@@ -68,6 +68,10 @@ CHECKS = [
         "scripts/validate_orchestrator_routine_persistence.py",
     ),
     (
+        "routine_conversational_recall",
+        "scripts/validate_routine_conversational_recall.py",
+    ),
+    (
         "gateway_contract",
         "scripts/validate_gateway_contract.py",
     ),
