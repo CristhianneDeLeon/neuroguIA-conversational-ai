@@ -3150,7 +3150,7 @@ class NeuroGuiaOrchestratorV2:
         step_number: Optional[int] = None
 
         numeric_match = re.search(
-            r"\\bpaso\\s+(\\d{1,2})\\b",
+            r"\bpaso\s+(\d{1,2})\b",
             normalized,
         )
         if numeric_match:
@@ -3162,7 +3162,7 @@ class NeuroGuiaOrchestratorV2:
         if step_number is None:
             for token, number in ordinal_map.items():
                 if re.search(
-                    rf"\\b{re.escape(token)}\\s+paso\\b|\\bpaso\\s+{re.escape(token)}\\b",
+                    rf"\b{re.escape(token)}\s+paso\b|\bpaso\s+{re.escape(token)}\b",
                     normalized,
                 ):
                     step_number = number
@@ -3172,7 +3172,7 @@ class NeuroGuiaOrchestratorV2:
         # Conservamos el texto original para no perder acentos ni capitalización.
         raw_message = " ".join(str(message or "").strip().split())
         replacement_match = re.search(
-            r"\\bpor\\s+(.+?)(?:[.!?]+)?$",
+            r"\bpor\s+(.+?)(?:[.!?]+)?$",
             raw_message,
             flags=re.IGNORECASE,
         )
