@@ -2632,6 +2632,7 @@ class NeuroGuiaOrchestratorV2:
         self.case_memory = CaseMemory(db_path=db_path)
         self.response_memory = ResponseMemory(db_path=db_path)
         self.user_context_memory = UserContextMemory(db_path=db_path)
+        self.routine_memory = RoutineMemory(db_path=db_path)
         self.conversation_curation = ConversationCuration(db_path=db_path)
 
         self.category_router = CategoryRouter()
@@ -2650,6 +2651,59 @@ class NeuroGuiaOrchestratorV2:
         self.llm_gateway = LLMGateway()
         self.learning_engine = LearningEngine()
         self.expert_mode_adapter = ExpertModeAdapter()
+
+    # =========================================================
+    # PERSISTENCIA DE RUTINAS
+    # =========================================================
+    def _store_generated_routine(
+        self,
+        routine_payload: Dict[str, Any],
+        family_id: Optional[str],
+        profile_id: Optional[str],
+        source_case_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Guarda una rutina generada cuando existe contexto válido.
+
+        La persistencia de rutinas es una operación auxiliar: nunca debe
+        bloquear ni interrumpir la respuesta conversacional. Si no existe
+        una rutina, falta familia/perfil o el almacenamiento falla, se
+        devuelve un estado descriptivo y el flujo principal continúa.
+        """
+
+        if not routine_payload:
+            return {
+                "stored": False,
+                "reason": "no_routine_payload",
+                "routine_id": None,
+            }
+
+        if not family_id:
+            return {
+                "stored": False,
+                "reason": "missing_family_id",
+                "routine_id": None,
+            }
+
+        if not profile_id:
+            return {
+                "stored": False,
+                "reason": "missing_profile_id",
+                "routine_id": None,
+            }
+
+        try:
+            return self.routine_memory.save_routine(
+                routine_payload=routine_payload,
+                family_id=family_id,
+                profile_id=profile_id,
+                source_case_id=source_case_id,
+            )
+        except Exception as exc:
+            return {
+                "stored": False,
+                "reason": f"routine_store_failed:{type(exc).__name__}",
+                "routine_id": None,
+            }
 
     # =========================================================
     # API PRINCIPAL
@@ -3575,6 +3629,22 @@ class NeuroGuiaOrchestratorV2:
             conversation_frame["case_memory_status"] = "temporary_session"
 
         # -----------------------------------------------------
+        # 16.1) PERSISTENCIA DE RUTINA GENERADA
+        # -----------------------------------------------------
+        routine_store_result = self._store_generated_routine(
+            routine_payload=routine_payload,
+            family_id=effective_family_id,
+            profile_id=effective_profile_id,
+            source_case_id=saved_case_id,
+        )
+
+        conversation_frame["routine_store_result"] = {
+            "stored": bool(routine_store_result.get("stored")),
+            "reason": routine_store_result.get("reason"),
+            "routine_id": routine_store_result.get("routine_id"),
+        }
+
+        # -----------------------------------------------------
         # 17) GUARDADO OPCIONAL DE RESPUESTA LOCAL
         # -----------------------------------------------------
         stored_response_id = None
@@ -3726,6 +3796,7 @@ class NeuroGuiaOrchestratorV2:
             "stage_result": stage_result,
             "stage_hints": stage_hints,
             "routine_payload": routine_payload,
+            "routine_store_result": routine_store_result,
             "functional_analysis": functional_analysis,
             "routine_activation": routine_activation,
             "confidence_payload": confidence_payload,
@@ -4235,6 +4306,19 @@ class NeuroGuiaOrchestratorV2:
             saved_case_id = None
             conversation_frame["case_memory_error"] = f"stable_demo_case_store_failed:{type(exc).__name__}"
 
+        routine_store_result = self._store_generated_routine(
+            routine_payload=routine_payload,
+            family_id=effective_family_id,
+            profile_id=effective_profile_id,
+            source_case_id=saved_case_id,
+        )
+
+        conversation_frame["routine_store_result"] = {
+            "stored": bool(routine_store_result.get("stored")),
+            "reason": routine_store_result.get("reason"),
+            "routine_id": routine_store_result.get("routine_id"),
+        }
+
         try:
             user_context_store_result = self.user_context_memory.register_turn_context(
                 source_message=message,
@@ -4292,6 +4376,7 @@ class NeuroGuiaOrchestratorV2:
             "stage_result": stage_result,
             "stage_hints": {},
             "routine_payload": routine_payload,
+            "routine_store_result": routine_store_result,
             "functional_analysis": functional_analysis,
             "routine_activation": routine_activation,
             "confidence_payload": confidence_payload,
@@ -6106,6 +6191,7 @@ class NeuroGuiaOrchestratorV2:
             "case_memory",
             "response_memory",
             "user_context_memory",
+            "routine_memory",
             "conversation_curation",
         ]:
             component = getattr(self, component_name, None)
