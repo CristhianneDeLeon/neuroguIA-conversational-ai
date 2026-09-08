@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: "neuroguIA: Hybrid Conversational AI for Socioemotional Support in Neurodivergent Contexts"
+message: "If you use neuroguIA in academic or research work, please cite this software repository and the associated thesis/dataset as appropriate."
+type: software
+authors:
+  - family-names: "De León"
+    given-names: "Cristhianne"
+    orcid: "https://orcid.org/0009-0007-4777-1741"
+year: 2026
+license: "CC-BY-NC-4.0"
+repository-code: "https://github.com/CristhianneDeLeon/neuroguIA-conversational-ai"
+url: "https://github.com/CristhianneDeLeon/neuroguIA-conversational-ai"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20337409"
+    description: "Zenodo record referenced by the repository README."
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "De León"
+      given-names: "Cristhianne"
+      orcid: "https://orcid.org/0009-0007-4777-1741"
+  title: "neuroguIA: Hybrid Conversational AI for Socioemotional Support in Neurodivergent Contexts"
+  year: 2026
+  publisher: "GitHub"
+  url: "https://github.com/CristhianneDeLeon/neuroguIA-conversational-ai"
