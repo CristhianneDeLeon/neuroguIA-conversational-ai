@@ -50,3 +50,12 @@ Desktop.ini
 
 # Respaldos temporales adicionales
 *.bak
+
+# Restricted research sources
+*Documento_Maestro_Oficial*
+*AUDITADO*.xlsx
+*.db
+*.sqlite
+*.sqlite3
+.env
+secrets.toml
