@@ -241,6 +241,209 @@ def _stable_demo_greeting_response(text: str) -> str:
     )
 
 
+# =========================================================
+# ACEPTACIÓN DE UNA GUÍA YA OFRECIDA
+# =========================================================
+# Un "sí" corto no siempre significa "dame otra estrategia".
+# Si la respuesta anterior terminó ofreciendo acompañar o guiar
+# la MISMA técnica, el siguiente turno debe conservar esa técnica
+# y no rotar automáticamente a otra intervención del banco.
+STABLE_DEMO_AFFIRMATIVE_ONLY = {
+    "si",
+    "si por favor",
+    "claro",
+    "claro que si",
+    "ok",
+    "okay",
+    "va",
+    "dale",
+    "de acuerdo",
+    "esta bien",
+    "por favor",
+    "quiero",
+    "si quiero",
+    "hagamoslo",
+    "vamos",
+}
+
+STABLE_DEMO_GUIDED_OFFER_MARKERS = {
+    "quieres que te acompane",
+    "quieres que te acompañe",
+    "quieres que te guie",
+    "quieres que te guíe",
+    "te acompano guiandote",
+    "te acompaño guiándote",
+    "acompanarte guiandote",
+    "acompañarte guiándote",
+    "lo hacemos juntas",
+    "lo hacemos juntos",
+    "lo hacemos paso a paso",
+    "hacerlo paso a paso",
+    "guiarte paso a paso",
+    "repetirlo conmigo",
+    "hacerlo conmigo",
+    "vamos haciendolo",
+    "vamos haciéndolo",
+}
+
+STABLE_DEMO_NEW_OPTION_MARKERS = {
+    "otra opcion",
+    "otra opción",
+    "otra tecnica",
+    "otra técnica",
+    "otra estrategia",
+    "algo distinto",
+    "otra forma",
+    "otra rutina",
+    "dices otra",
+    "te doy otra",
+}
+
+
+def _stable_demo_is_affirmative_only(text: str) -> bool:
+    """Detecta una aceptación breve sin contenido temático nuevo."""
+    normalized = _stable_demo_normalize(text)
+    return normalized in {
+        _stable_demo_normalize(item)
+        for item in STABLE_DEMO_AFFIRMATIVE_ONLY
+    }
+
+
+def _stable_demo_last_assistant_text(
+    chat_history: Optional[List[Dict[str, Any]]],
+    previous_frame: Optional[Dict[str, Any]],
+) -> str:
+    """Obtiene la última respuesta visible; cae al frame si no hay historial."""
+    for turn in reversed(chat_history or []):
+        if not isinstance(turn, dict):
+            continue
+        assistant_text = str(turn.get("assistant") or "").strip()
+        if assistant_text:
+            return assistant_text
+
+    frame = previous_frame or {}
+    for candidate in [
+        frame.get("last_visible_response"),
+        frame.get("last_guided_action"),
+        frame.get("last_action_instruction"),
+    ]:
+        candidate_text = str(candidate or "").strip()
+        if candidate_text:
+            return candidate_text
+
+    return ""
+
+
+def _stable_demo_extract_first_numbered_step(text: str) -> Optional[str]:
+    """Extrae el primer paso de una lista 1., 2., ... si existe."""
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+
+    match = re.search(
+        r"(?:^|\n)\s*1[\.\)]\s*(.+?)(?=\n\s*2[\.\)]|\Z)",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+
+    step = " ".join(str(match.group(1) or "").strip().split())
+    if not step:
+        return None
+
+    return step[:320].rstrip()
+
+
+def _stable_demo_build_guided_acceptance_response(
+    *,
+    message: str,
+    previous_frame: Optional[Dict[str, Any]],
+    chat_history: Optional[List[Dict[str, Any]]],
+) -> Optional[Dict[str, str]]:
+    """
+    Resuelve un "sí" cuando la respuesta anterior ofreció GUIAR la misma
+    técnica. Devuelve None cuando el "sí" debe seguir el flujo normal,
+    por ejemplo si se ofreció explícitamente otra opción/estrategia.
+    """
+    if not _stable_demo_is_affirmative_only(message):
+        return None
+
+    previous_assistant = _stable_demo_last_assistant_text(
+        chat_history=chat_history,
+        previous_frame=previous_frame,
+    )
+    if not previous_assistant:
+        return None
+
+    normalized_previous = _stable_demo_normalize(previous_assistant)
+
+    if any(
+        _stable_demo_normalize(marker) in normalized_previous
+        for marker in STABLE_DEMO_NEW_OPTION_MARKERS
+    ):
+        return None
+
+    has_guided_offer = any(
+        _stable_demo_normalize(marker) in normalized_previous
+        for marker in STABLE_DEMO_GUIDED_OFFER_MARKERS
+    )
+    if not has_guided_offer:
+        return None
+
+    first_step = _stable_demo_extract_first_numbered_step(previous_assistant)
+
+    if any(
+        marker in normalized_previous
+        for marker in ["relajacion muscular", "tension", "tensa", "musculos", "mandibula", "hombros"]
+    ):
+        if first_step:
+            response_text = (
+                "Claro. Seguimos con esta misma relajación muscular, sin cambiar de técnica. "
+                f"Empecemos por el primer paso: {first_step} "
+                "Hazlo con calma y, cuando estés lista o listo, dime “listo” para continuar con el siguiente."
+            )
+        else:
+            response_text = (
+                "Claro. Seguimos con la misma relajación muscular, paso a paso. "
+                "Haz primero la parte que te acabo de indicar y, cuando estés lista o listo, dime “listo”."
+            )
+    elif any(
+        marker in normalized_previous
+        for marker in ["respira", "respiracion", "inhala", "exhala", "aire"]
+    ):
+        response_text = (
+            "Claro. Seguimos con la misma respiración, sin cambiar de ejercicio. "
+            "Acomódate como estés, inhala lentamente por la nariz y deja salir el aire suave, sin forzarlo. "
+            "Haz una respiración así y dime “listo”; seguimos desde ahí."
+        )
+    elif any(
+        marker in normalized_previous
+        for marker in ["5 4 3", "54321", "cinco sentidos", "grounding", "pies", "contacto con el suelo"]
+    ):
+        response_text = (
+            "Claro. Seguimos con el mismo ejercicio de orientación al presente. "
+            "Sin prisa, nota primero el contacto de tus pies o de tu cuerpo con la superficie que te sostiene. "
+            "Cuando lo tengas, dime “listo” y avanzamos al siguiente paso."
+        )
+    elif first_step:
+        response_text = (
+            "Claro. Seguimos con esta misma técnica, sin cambiar a otra estrategia. "
+            f"Empecemos por el primer paso: {first_step} "
+            "Cuando lo hayas hecho, dime “listo” y continuamos."
+        )
+    else:
+        response_text = (
+            "Claro. Seguimos con la misma técnica que acabamos de iniciar, sin cambiar de estrategia. "
+            "Haz el primer paso que te indiqué y dime “listo”; continuamos desde ahí."
+        )
+
+    return {
+        "turn_family": "guided_action_acceptance",
+        "response_text": response_text,
+    }
+
+
 STABLE_DEMO_OVERTHINKING_BLOCK_TURNS = 5
 
 
@@ -2232,7 +2435,14 @@ def stable_demo_response(
         if overthinking_negated
         else max(previous_overthinking_block - 1, 0)
     )
-    direct_turn = _stable_demo_build_direct_turn_response(
+    # Antes de rotar intervenciones, comprobamos si el usuario acaba
+    # de aceptar que lo guiemos en la MISMA técnica ya ofrecida.
+    guided_acceptance = _stable_demo_build_guided_acceptance_response(
+        message=message,
+        previous_frame=previous_frame,
+        chat_history=chat_history,
+    )
+    direct_turn = guided_acceptance or _stable_demo_build_direct_turn_response(
         route_id=route_id,
         normalized=normalized,
         support_subject=support_subject,
