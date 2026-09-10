@@ -89,6 +89,158 @@ def _stable_demo_has(normalized: str, phrases: List[str]) -> bool:
     return any(_stable_demo_normalize(phrase) in normalized for phrase in phrases)
 
 
+# =========================================================
+# SALUDOS / APERTURA CONVERSACIONAL
+# =========================================================
+# Un saludo aislado nunca debe heredar la ruta anterior ni activar
+# respiración, grounding, crisis, sueño u otra intervención. La detección
+# es deliberadamente conservadora: sólo intercepta mensajes que son
+# exclusivamente un saludo o una cortesía inicial. Si el usuario escribe
+# "Hola, estoy muy ansiosa", NO se intercepta y el mensaje sigue el
+# pipeline normal para que se detecte ansiedad.
+STABLE_DEMO_GREETING_ONLY = {
+    "hola",
+    "holi",
+    "holis",
+    "ola",
+    "alo",
+    "buenas",
+    "buen dia",
+    "muy buen dia",
+    "buenos dias",
+    "muy buenos dias",
+    "buenas tardes",
+    "muy buenas tardes",
+    "buenas noches",
+    "muy buenas noches",
+    "que tal",
+    "como estas",
+    "como esta",
+    "como andas",
+    "como va",
+    "como vamos",
+    "hey",
+    "ey",
+    "hi",
+    "hello",
+    "saludos",
+    "saluditos",
+    "hola que tal",
+    "hola como estas",
+    "hola como esta",
+    "hola buen dia",
+    "hola buenos dias",
+    "hola buenas tardes",
+    "hola buenas noches",
+    "hola hola",
+    "hey hola",
+    "hola hey",
+    "hola de nuevo",
+    "hola otra vez",
+    "buen dia como estas",
+    "buenos dias como estas",
+    "buenas tardes como estas",
+    "buenas noches como estas",
+}
+
+STABLE_DEMO_GREETING_VOCATIVES = {
+    "neuroguia",
+    "neuro guia",
+    "neuroguia ai",
+    "neuro guia ai",
+    "amiga",
+    "amigo",
+}
+
+
+def _stable_demo_compact_greeting_text(text: str) -> str:
+    """Normaliza saludos sin alterar mensajes con contenido real."""
+    normalized = _stable_demo_normalize(text)
+    if not normalized:
+        return ""
+
+    # Variantes coloquiales con letras repetidas: holaaa, holaaaa, holiii...
+    normalized = re.sub(r"\bh+o+l+a+\b", "hola", normalized)
+    normalized = re.sub(r"\bh+o+l+i+s*\b", "holi", normalized)
+
+    # Quita únicamente vocativos neutros, para reconocer:
+    # "Hola NeuroGuIA", "Buenos días, NeuroGuIA", etc.
+    for vocative in sorted(
+        STABLE_DEMO_GREETING_VOCATIVES,
+        key=len,
+        reverse=True,
+    ):
+        pattern = rf"(?:^|\s){re.escape(vocative)}(?:\s|$)"
+        normalized = re.sub(pattern, " ", normalized)
+
+    return " ".join(normalized.split())
+
+
+def _stable_demo_is_greeting_only(text: str) -> bool:
+    """True sólo cuando el turno contiene un saludo/cortesía y nada más."""
+    normalized = _stable_demo_compact_greeting_text(text)
+    if not normalized:
+        return False
+
+    if normalized in STABLE_DEMO_GREETING_ONLY:
+        return True
+
+    # Permite combinaciones naturales de dos saludos sin abrir la puerta
+    # a frases con contenido clínico o funcional.
+    greeting_atoms = {
+        "hola",
+        "holi",
+        "ola",
+        "alo",
+        "buenas",
+        "buen dia",
+        "buenos dias",
+        "buenas tardes",
+        "buenas noches",
+        "que tal",
+        "como estas",
+        "como esta",
+        "como andas",
+        "como va",
+        "hey",
+        "ey",
+        "hi",
+        "hello",
+        "saludos",
+    }
+    for first in greeting_atoms:
+        if normalized == first:
+            return True
+        if not normalized.startswith(first + " "):
+            continue
+        rest = normalized[len(first):].strip()
+        if rest in greeting_atoms:
+            return True
+
+    return False
+
+
+def _stable_demo_greeting_response(text: str) -> str:
+    """Respuesta determinista para saludos aislados."""
+    normalized = _stable_demo_compact_greeting_text(text)
+
+    if "buenos dias" in normalized or "buen dia" in normalized:
+        opening = "¡Buenos días!"
+    elif "buenas tardes" in normalized:
+        opening = "¡Buenas tardes!"
+    elif "buenas noches" in normalized:
+        opening = "¡Buenas noches!"
+    elif normalized in {"que tal", "hola que tal"}:
+        opening = "¡Hola! Qué gusto leerte."
+    else:
+        opening = "¡Hola!"
+
+    return (
+        f"{opening} Estoy aquí para acompañarte. "
+        "Cuéntame, ¿qué está pasando o en qué te gustaría que te apoye hoy?"
+    )
+
+
 STABLE_DEMO_OVERTHINKING_BLOCK_TURNS = 5
 
 
@@ -1427,6 +1579,12 @@ def _stable_demo_select_intervention(
 
 def _stable_demo_detect_route(message: str, previous_frame: Optional[Dict[str, Any]]) -> Optional[str]:
     normalized = _stable_demo_normalize(message)
+
+    # Un saludo aislado es una apertura/meta-conversación, nunca una
+    # continuación automática de ansiedad, crisis, sueño u otra ruta previa.
+    if _stable_demo_is_greeting_only(message):
+        return "meta"
+
     previous_route = _stable_demo_previous_route(previous_frame)
     support_subject = _stable_demo_detect_subject(message, previous_frame, previous_route)
     explicit_escalation = _stable_demo_explicit_escalation(normalized)
@@ -2055,6 +2213,7 @@ def stable_demo_response(
         return {"handled": False}
 
     normalized = _stable_demo_normalize(message)
+    greeting_only = _stable_demo_is_greeting_only(message)
     previous_route = _stable_demo_previous_route(previous_frame)
     previous_step = _stable_demo_previous_step(previous_frame)
     previous_intervention = _stable_demo_previous_intervention(previous_frame)
@@ -2089,13 +2248,20 @@ def stable_demo_response(
         )
         step_index = 0
     elif route_id == "meta":
-        response_text = "Soy NeuroGuIA. Estoy aquí para acompañar, ordenar lo que pasa y ayudarte a encontrar un paso claro."
-        if _stable_demo_has(normalized, ["como puedo llamarte", "como te llamo", "tu nombre"]):
-            response_text = "Puedes llamarme NeuroGuIA."
-        elif _stable_demo_has(normalized, ["que puedes hacer", "para que sirves"]):
-            response_text = "Puedo ayudarte a ordenar lo que está pasando y darte un siguiente paso claro, breve y seguro."
-        elif _stable_demo_has(normalized, ["puedo hablar contigo", "puedo platicar contigo"]):
-            response_text = "Sí. Puedes hablar conmigo aquí; te respondo con pasos claros y cuidado."
+        if greeting_only:
+            # Respuesta fija: no depende de memoria previa ni de una
+            # intervención activa. Esto evita respuestas como respiración
+            # o grounding ante un simple "hola".
+            turn_family = "greeting"
+            response_text = _stable_demo_greeting_response(message)
+        else:
+            response_text = "Soy NeuroGuIA. Estoy aquí para acompañar, ordenar lo que pasa y ayudarte a encontrar un paso claro."
+            if _stable_demo_has(normalized, ["como puedo llamarte", "como te llamo", "tu nombre"]):
+                response_text = "Puedes llamarme NeuroGuIA."
+            elif _stable_demo_has(normalized, ["que puedes hacer", "para que sirves"]):
+                response_text = "Puedo ayudarte a ordenar lo que está pasando y darte un siguiente paso claro, breve y seguro."
+            elif _stable_demo_has(normalized, ["puedo hablar contigo", "puedo platicar contigo"]):
+                response_text = "Sí. Puedes hablar conmigo aquí; te respondo con pasos claros y cuidado."
         step_index = 0
     elif direct_turn:
         turn_family = str(direct_turn.get("turn_family") or "direct_question")
@@ -2216,6 +2382,7 @@ def stable_demo_response(
         "stable_demo_intervention_id": intervention_id,
         "last_intervention_id": intervention_id,
         "direct_turn_response": bool(direct_turn),
+        "greeting_only": greeting_only,
         "overthinking_block_turns": next_overthinking_block,
         "overthinking_block_active": overthinking_blocked,
         "exhausted_strategies": exhausted_strategies,
@@ -2258,24 +2425,29 @@ def stable_demo_response(
         conversation_frame["pre_medication_route_id"] = pre_medication_route_id
         conversation_frame["pre_medication_step_index"] = pre_medication_step_index
 
-    behavioral_plan = _stable_demo_build_behavioral_plan(
-        route_id=route_id,
-        support_subject=support_subject,
-        support_mode=support_mode,
-        intervention_id=intervention_id,
-        response_text=response_text,
-        message=message,
-        previous_frame=previous_frame,
-        chat_history=chat_history,
-        turn_family=turn_family,
-        step_index=step_index,
-    )
-    if direct_turn:
+    if greeting_only:
+        # Los saludos no pasan por el redactor generativo ni reutilizan
+        # antecedentes: la respuesta debe permanecer determinista.
+        behavioral_plan: Dict[str, Any] = {}
+    else:
+        behavioral_plan = _stable_demo_build_behavioral_plan(
+            route_id=route_id,
+            support_subject=support_subject,
+            support_mode=support_mode,
+            intervention_id=intervention_id,
+            response_text=response_text,
+            message=message,
+            previous_frame=previous_frame,
+            chat_history=chat_history,
+            turn_family=turn_family,
+            step_index=step_index,
+        )
+    if not greeting_only and direct_turn:
         behavioral_plan["conversation_priority"] = "answer_current_user_turn"
         behavioral_plan["must_answer_current_question_first"] = True
         behavioral_plan["do_not_advance_intervention"] = True
         behavioral_plan["current_turn_task"] = "Responder la pregunta o aclaracion concreta del usuario y no avanzar la plantilla."
-    if overthinking_blocked:
+    if not greeting_only and overthinking_blocked:
         behavioral_plan["blocked_interventions"] = {
             "sobrepensamiento": next_overthinking_block,
         }
@@ -2297,6 +2469,7 @@ def stable_demo_response(
         "exhausted_strategies": exhausted_strategies,
         "turn_family": turn_family,
         "direct_turn_response": bool(direct_turn),
+        "greeting_only": greeting_only,
         "overthinking_block_turns": next_overthinking_block,
         "overthinking_block_active": overthinking_blocked,
         "conversation_frame": conversation_frame,
@@ -3562,6 +3735,42 @@ class NeuroGuiaOrchestratorV2:
             elif role_key in {"hijo", "hija", "nino", "nina", "ni o", "ni a"}:
                 previous_frame.setdefault("support_subject", "child")
 
+        # -----------------------------------------------------
+        # 1.0) SALUDO AISLADO / APERTURA SEGURA
+        # -----------------------------------------------------
+        # Se intercepta ANTES del context_override y de la reparación
+        # conversacional. Así, un "hola" no puede convertirse en un
+        # follow-up de una respiración, crisis, sueño u otra ruta anterior.
+        if _stable_demo_is_greeting_only(message):
+            context_override = self._empty_context_override(
+                message=message,
+                effective_message=message,
+            )
+            greeting_demo = stable_demo_response(
+                message=message,
+                previous_frame=previous_frame,
+                chat_history=[],
+                variant_seed=session_scope_id,
+            )
+            if greeting_demo.get("handled"):
+                return self._build_stable_demo_process_result(
+                    stable_demo=greeting_demo,
+                    message=message,
+                    effective_message=message,
+                    previous_frame=previous_frame,
+                    context_override=context_override,
+                    unit_context=unit_context,
+                    user_context_payload=user_context_payload,
+                    user_context_store_result=user_context_store_result,
+                    conversation_curation_result=conversation_curation_result,
+                    session_scope_id=session_scope_id,
+                    active_profile=active_profile,
+                    requested_family_id=family_id,
+                    requested_profile_id=profile_id,
+                    chat_history=[],
+                    chat_history_size=0,
+                )
+
         context_override = self._detect_context_override(
             message=message,
             chat_history=chat_history,
@@ -4674,7 +4883,11 @@ class NeuroGuiaOrchestratorV2:
             or support_state_from_frame.get("exhausted_strategies")
             or {}
         )
+        greeting_only = bool(stable_demo.get("greeting_only", False) or conversation_frame.get("greeting_only", False))
         behavioral_plan = dict(stable_demo.get("behavioral_plan") or conversation_frame.get("behavioral_plan") or {})
+        if greeting_only:
+            behavioral_plan = {}
+            conversation_frame["greeting_only"] = True
         if active_profile:
             profile_context = {
                 "profile_id": effective_profile_id,
@@ -4692,12 +4905,13 @@ class NeuroGuiaOrchestratorV2:
                 "executive_profile": active_profile.get("executive_profile"),
                 "sleep_profile": active_profile.get("sleep_profile"),
             }
-            behavioral_plan["active_profile_context"] = profile_context
-            behavioral_plan["profile_use_instruction"] = (
-                "Usa el perfil activo como contexto principal. No asumas hijos, madre, padre "
-                "o cuidador si el perfil activo indica que la persona habla de si misma. "
-                "Si el alias/rol del perfil aparece, adapta el lenguaje a ese perfil sin diagnosticar."
-            )
+            if not greeting_only:
+                behavioral_plan["active_profile_context"] = profile_context
+                behavioral_plan["profile_use_instruction"] = (
+                    "Usa el perfil activo como contexto principal. No asumas hijos, madre, padre "
+                    "o cuidador si el perfil activo indica que la persona habla de si misma. "
+                    "Si el alias/rol del perfil aparece, adapta el lenguaje a ese perfil sin diagnosticar."
+                )
             conversation_frame["active_profile_context"] = profile_context
             conversation_frame["profile_id"] = effective_profile_id
             conversation_frame["family_id"] = effective_family_id
@@ -4888,16 +5102,24 @@ class NeuroGuiaOrchestratorV2:
             0.72 if route_id in {"ansiedad", "sobrecarga_cuidador"} else 0.55
         )
         stable_caregiver_capacity = 0.25 if route_id == "sobrecarga_cuidador" else None
-        routine_activation = self.routine_activation_engine.evaluate(
-            message=effective_message,
-            functional_analysis=functional_analysis,
-            technical_category=conversation_frame.get("conversation_domain"),
-            primary_state=stable_primary_state,
-            turn_family=conversation_control.get("turn_family"),
-            emotional_intensity=stable_emotional_intensity,
-            caregiver_capacity=stable_caregiver_capacity,
-            previous_frame=previous_frame,
-        )
+        if greeting_only:
+            routine_activation = {
+                "should_generate": False,
+                "reason": "greeting_only",
+                "routine_type": None,
+                "display_mode": None,
+            }
+        else:
+            routine_activation = self.routine_activation_engine.evaluate(
+                message=effective_message,
+                functional_analysis=functional_analysis,
+                technical_category=conversation_frame.get("conversation_domain"),
+                primary_state=stable_primary_state,
+                turn_family=conversation_control.get("turn_family"),
+                emotional_intensity=stable_emotional_intensity,
+                caregiver_capacity=stable_caregiver_capacity,
+                previous_frame=previous_frame,
+            )
         routine_payload: Dict[str, Any] = {}
         if routine_activation.get("should_generate"):
             routine_payload = self.routine_builder.build_routine(
@@ -5091,33 +5313,36 @@ class NeuroGuiaOrchestratorV2:
             )
 
         saved_case_id = None
-        try:
-            saved_case_id = self.case_memory.create_case(
-                family_id=effective_family_id,
-                profile_id=effective_profile_id,
-                unit_type=unit_context.get("unit_type", "individual"),
-                raw_input=message,
-                normalized_summary=self._normalize_summary(effective_message),
-                detected_category=category_analysis.get("detected_category"),
-                detected_stage=stage_result.get("stage"),
-                primary_state=state_analysis.get("primary_state"),
-                secondary_states=state_analysis.get("secondary_states", []),
-                suggested_strategy=decision_payload.get("selected_strategy"),
-                suggested_microaction=decision_payload.get("selected_microaction"),
-                suggested_routine_type=decision_payload.get("selected_routine_type"),
-                response_mode=decision_payload.get("decision_mode"),
-                followup_needed=False,
-                tags=self._deduplicate([
-                    conversation_frame.get("conversation_domain") or "",
-                    functional_analysis.get("functional_category") or "",
-                    conversation_frame.get("support_subject") or "",
-                    conversation_frame.get("conversation_phase") or "",
-                    "stable_demo",
-                ]),
-            )
-        except Exception as exc:
-            saved_case_id = None
-            conversation_frame["case_memory_error"] = f"stable_demo_case_store_failed:{type(exc).__name__}"
+        if greeting_only:
+            conversation_frame["case_memory_store_skipped"] = "greeting_only"
+        else:
+            try:
+                saved_case_id = self.case_memory.create_case(
+                    family_id=effective_family_id,
+                    profile_id=effective_profile_id,
+                    unit_type=unit_context.get("unit_type", "individual"),
+                    raw_input=message,
+                    normalized_summary=self._normalize_summary(effective_message),
+                    detected_category=category_analysis.get("detected_category"),
+                    detected_stage=stage_result.get("stage"),
+                    primary_state=state_analysis.get("primary_state"),
+                    secondary_states=state_analysis.get("secondary_states", []),
+                    suggested_strategy=decision_payload.get("selected_strategy"),
+                    suggested_microaction=decision_payload.get("selected_microaction"),
+                    suggested_routine_type=decision_payload.get("selected_routine_type"),
+                    response_mode=decision_payload.get("decision_mode"),
+                    followup_needed=False,
+                    tags=self._deduplicate([
+                        conversation_frame.get("conversation_domain") or "",
+                        functional_analysis.get("functional_category") or "",
+                        conversation_frame.get("support_subject") or "",
+                        conversation_frame.get("conversation_phase") or "",
+                        "stable_demo",
+                    ]),
+                )
+            except Exception as exc:
+                saved_case_id = None
+                conversation_frame["case_memory_error"] = f"stable_demo_case_store_failed:{type(exc).__name__}"
 
         routine_store_result = self._store_generated_routine(
             routine_payload=routine_payload,
