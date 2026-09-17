@@ -3177,6 +3177,10 @@ class NeuroGuiaOrchestratorV2:
             "pasos",
         ]
         recall_markers = [
+            "recupera",
+            "recuperame",
+            "recuperar",
+            "recuperemos",
             "recuerdas",
             "recuerda",
             "recordar",
@@ -3195,6 +3199,9 @@ class NeuroGuiaOrchestratorV2:
             "retomar la rutina",
             "volver a ver",
             "ver otra vez",
+            "que rutina tienes",
+            "consulta la rutina",
+            "consulta mi rutina",
         ]
 
         has_routine_marker = any(marker in normalized for marker in routine_markers)
@@ -3554,6 +3561,20 @@ class NeuroGuiaOrchestratorV2:
             return False
 
         if _stable_demo_explicit_escalation(normalized):
+            return False
+
+        negated_update_markers = [
+            "no la modifiques",
+            "no lo modifiques",
+            "no modificar",
+            "sin modificar",
+            "no la cambies",
+            "no cambiar",
+            "sin cambiar",
+            "solo recupera",
+            "solo consultar",
+        ]
+        if any(marker in normalized for marker in negated_update_markers):
             return False
 
         routine_markers = [
