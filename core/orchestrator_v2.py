@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional
@@ -5194,26 +5195,68 @@ class NeuroGuiaOrchestratorV2:
                     or writer_status.get("model")
                     or ""
                 ).strip() or None
-                llm_curated_payload = self.response_curator.curate_behavioral_plan_response(
-                    llm_result=llm_result,
-                    behavioral_plan=behavioral_plan,
-                )
-                llm_curator_status = "approved" if bool((llm_curated_payload or {}).get("approved")) else "rejected"
-                curated_text = str(
-                    (llm_curated_payload or {}).get("curated_response_text")
-                    or ""
-                ).strip()
-                if bool((llm_curated_payload or {}).get("approved")) and curated_text:
-                    response_text = curated_text
-                    llm_writer_used = True
-                    response_source = "llm_writer"
+                demo_force_generative = str(
+                    os.getenv("DEMO_FORCE_GENERATIVE", "false") or "false"
+                ).strip().lower() in {
+                    "1", "true", "yes", "y", "on", "si", "sí", "enabled"
+                }
+
+                if demo_force_generative:
+                    demo_text = str(
+                        (llm_result or {}).get("response_text") or ""
+                    ).strip()
+
+                    if demo_text:
+                        response_text = demo_text
+                        llm_writer_used = True
+                        response_source = "llm_demo_full_generation"
+                        llm_curator_status = "demo_supervised_bypass"
+
+                        llm_curated_payload = {
+                            "approved": True,
+                            "curated_response_text": demo_text,
+                            "used_llm": True,
+                            "source_provider": llm_provider,
+                            "curation_notes": [
+                                "demo_force_generative",
+                                "case_fictitious",
+                            ],
+                        }
+                    else:
+                        response_source = "fallback_deterministic"
+                        llm_block_reason = str(
+                            (llm_result or {}).get("fallback_reason")
+                            or "empty_demo_generation"
+                        )
+
                 else:
-                    response_source = "fallback_deterministic"
-                    llm_block_reason = _stable_demo_llm_block_reason(
+                    llm_curated_payload = self.response_curator.curate_behavioral_plan_response(
                         llm_result=llm_result,
-                        llm_curated_payload=llm_curated_payload,
-                        default_reason="curator_rejected",
+                        behavioral_plan=behavioral_plan,
                     )
+
+                    llm_curator_status = (
+                        "approved"
+                        if bool((llm_curated_payload or {}).get("approved"))
+                        else "rejected"
+                    )
+
+                    curated_text = str(
+                        (llm_curated_payload or {}).get("curated_response_text")
+                        or ""
+                    ).strip()
+
+                    if bool((llm_curated_payload or {}).get("approved")) and curated_text:
+                        response_text = curated_text
+                        llm_writer_used = True
+                        response_source = "llm_writer"
+                    else:
+                        response_source = "fallback_deterministic"
+                        llm_block_reason = _stable_demo_llm_block_reason(
+                            llm_result=llm_result,
+                            llm_curated_payload=llm_curated_payload,
+                            default_reason="curator_rejected",
+                        )
             else:
                 llm_block_reason = str(
                     writer_status.get("block_reason") or "missing_openai_key_or_disabled"
