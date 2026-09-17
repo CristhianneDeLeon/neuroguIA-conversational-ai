@@ -3221,23 +3221,26 @@ class NeuroGuiaOrchestratorV2:
         adjustments = list(routine.get("adjustments") or [])
         followup_question = str(routine.get("followup_question") or "").strip()
 
+        # Texto plano deliberado: la interfaz actual muestra el Markdown como
+        # caracteres literales. Así la respuesta se ve bien tanto en Streamlit
+        # como en consumidores que sí admiten Markdown.
         lines: List[str] = [
-            f"Sí. Tengo guardada para {alias} la **{routine_name}**."
+            f"Sí. Tengo guardada para {alias} la rutina {routine_name}."
         ]
 
         if goal:
-            lines.append(f"\n**Objetivo:** {goal}")
+            lines.append(f"\nObjetivo: {goal}")
 
         display_steps = steps or short_version
         if display_steps:
-            lines.append("\n**Pasos:**")
+            lines.append("\nPasos:")
             for index, step in enumerate(display_steps, start=1):
                 text = str(step or "").strip()
                 if text:
                     lines.append(f"{index}. {text}")
 
         if adjustments:
-            lines.append("\n**Ajustes guardados:**")
+            lines.append("\nAjustes guardados:")
             for adjustment in adjustments[:4]:
                 text = str(adjustment or "").strip()
                 if text:
@@ -3476,12 +3479,20 @@ class NeuroGuiaOrchestratorV2:
             "cambiemos",
             "modifica",
             "modificar",
+            "actualiza",
+            "actualizar",
             "ajusta",
             "ajustar",
             "reemplaza",
             "reemplazar",
             "sustituye",
             "sustituir",
+            "establece",
+            "establecer",
+            "define",
+            "definir",
+            "conserva",
+            "conservar",
         ]
 
         return bool(
@@ -3490,11 +3501,12 @@ class NeuroGuiaOrchestratorV2:
         )
 
     def _parse_routine_step_update(self, message: str) -> Dict[str, Any]:
-        """Extrae un reemplazo de paso desde lenguaje conversacional simple.
+        """Extrae una actualización segura desde lenguaje conversacional.
 
         Ejemplos soportados:
         - "Cambia el tercer paso de esa rutina por revisar la mochila."
         - "Reemplaza el paso 2 por preparar la ropa."
+        - "Establece reducir la tarea a un paso como estrategia principal."
         """
 
         normalized = self._normalize_followup_text(message)
@@ -3505,6 +3517,48 @@ class NeuroGuiaOrchestratorV2:
                 "step_index": None,
                 "replacement": None,
             }
+
+        # Primero resolvemos la preferencia derivada de una pregunta de
+        # seguimiento. Este tipo de actualización no reemplaza los pasos:
+        # se guarda como ajuste principal y conserva la rutina original.
+        raw_message = " ".join(str(message or "").strip().split())
+        primary_patterns = [
+            (
+                r"\b(?:establece|define|marca|conserva)\s+"
+                r"[\"'“”]?(.+?)[\"'“”]?\s+como\s+"
+                r"(?:mi\s+)?(?:estrategia|opci[oó]n)\s+principal\b"
+            ),
+            (
+                r"\b(?:mi\s+)?(?:estrategia|opci[oó]n)\s+principal\s+"
+                r"(?:es|ser[aá])\s+[\"'“”]?(.+?)[\"'“”]?"
+                r"(?:[.!?]|$)"
+            ),
+            (
+                r"\bme\s+ayud[oó]\s+m[aá]s\s+(.+?)"
+                r"(?:[.!?]|$)"
+            ),
+        ]
+        for pattern in primary_patterns:
+            primary_match = re.search(
+                pattern,
+                raw_message,
+                flags=re.IGNORECASE,
+            )
+            if not primary_match:
+                continue
+
+            strategy = str(primary_match.group(1) or "").strip()
+            strategy = strategy.strip(" \"'“”.,;:!?-")
+            if strategy:
+                return {
+                    "parsed": True,
+                    "reason": "parsed_primary_strategy",
+                    "update_type": "primary_strategy",
+                    "primary_strategy": strategy,
+                    "step_index": None,
+                    "step_number": None,
+                    "replacement": None,
+                }
 
         ordinal_map = {
             "primer": 1,
@@ -3554,7 +3608,6 @@ class NeuroGuiaOrchestratorV2:
 
         replacement = None
         # Conservamos el texto original para no perder acentos ni capitalización.
-        raw_message = " ".join(str(message or "").strip().split())
         replacement_match = re.search(
             r"\bpor\s+(.+?)(?:[.!?]+)?$",
             raw_message,
@@ -3583,6 +3636,7 @@ class NeuroGuiaOrchestratorV2:
         return {
             "parsed": True,
             "reason": "parsed",
+            "update_type": "step_replacement",
             "step_index": step_number - 1,
             "step_number": step_number,
             "replacement": replacement,
@@ -3601,7 +3655,7 @@ class NeuroGuiaOrchestratorV2:
         conversation_curation_result: Dict[str, Any],
         session_scope_id: Optional[str],
     ) -> Dict[str, Any]:
-        """Modifica un paso de una rutina persistida dentro del perfil activo."""
+        """Modifica una rutina persistida dentro del perfil activo."""
 
         effective_family_id = (
             (active_profile or {}).get("family_id")
@@ -3664,6 +3718,55 @@ class NeuroGuiaOrchestratorV2:
                 "routine_id": routine.get("routine_id"),
             }
             updated_routine = dict(routine)
+        elif parsed_update.get("update_type") == "primary_strategy":
+            primary_strategy = str(
+                parsed_update.get("primary_strategy") or ""
+            ).strip()
+            stored_update = self.routine_memory.set_primary_strategy(
+                routine_id=str(routine.get("routine_id") or ""),
+                family_id=str(effective_family_id or ""),
+                profile_id=str(effective_profile_id or ""),
+                strategy=primary_strategy,
+            )
+
+            if stored_update.get("updated"):
+                updated_routine = dict(stored_update.get("routine") or {})
+                routine_name = str(
+                    updated_routine.get("routine_name")
+                    or routine.get("routine_name")
+                    or "rutina guardada"
+                ).strip()
+                updated_version = self._format_recalled_routine_response(
+                    routine=updated_routine,
+                    active_profile=active_profile,
+                )
+                response_text = (
+                    f"Listo. Actualicé la rutina {routine_name}.\n\n"
+                    f"Estrategia principal guardada: {primary_strategy}.\n\n"
+                    f"Versión actualizada:\n{updated_version}"
+                )
+                update_result = {
+                    "updated": True,
+                    "reason": "primary_strategy_updated",
+                    "routine_id": updated_routine.get("routine_id"),
+                    "update_type": "primary_strategy",
+                    "primary_strategy": primary_strategy,
+                }
+            else:
+                updated_routine = dict(routine)
+                response_text = (
+                    "No pude guardar la estrategia principal en la rutina. "
+                    "No modifiqué otros datos."
+                )
+                update_result = {
+                    "updated": False,
+                    "reason": str(
+                        stored_update.get("reason")
+                        or "primary_strategy_update_failed"
+                    ),
+                    "routine_id": routine.get("routine_id"),
+                    "update_type": "primary_strategy",
+                }
         else:
             step_index = int(parsed_update.get("step_index", -1))
             replacement = str(parsed_update.get("replacement") or "").strip()
@@ -3700,7 +3803,7 @@ class NeuroGuiaOrchestratorV2:
                         or "rutina guardada"
                     ).strip()
                     response_text = (
-                        f"Listo. Actualicé el paso {step_index + 1} de **{routine_name}**.\n\n"
+                        f"Listo. Actualicé el paso {step_index + 1} de {routine_name}.\n\n"
                         f"Antes: {previous_step}\n\n"
                         f"Ahora: {replacement}\n\n"
                         "La rutina quedó guardada con este cambio."
@@ -3709,6 +3812,7 @@ class NeuroGuiaOrchestratorV2:
                         "updated": True,
                         "reason": "updated",
                         "routine_id": updated_routine.get("routine_id"),
+                        "update_type": "step_replacement",
                         "step_number": step_index + 1,
                         "previous_step": previous_step,
                         "replacement": replacement,
@@ -3779,6 +3883,8 @@ class NeuroGuiaOrchestratorV2:
                 "routine_updated": bool(update_result.get("updated")),
                 "routine_id": update_result.get("routine_id"),
                 "step_number": update_result.get("step_number"),
+                "update_type": update_result.get("update_type"),
+                "primary_strategy": update_result.get("primary_strategy"),
                 "active_profile_alias": (active_profile or {}).get("alias"),
             },
         }
