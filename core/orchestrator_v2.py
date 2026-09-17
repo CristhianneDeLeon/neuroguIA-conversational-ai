@@ -3279,6 +3279,7 @@ class NeuroGuiaOrchestratorV2:
 
         alias = str((active_profile or {}).get("alias") or "este perfil").strip()
         routine_name = str(routine.get("routine_name") or "Rutina guardada").strip()
+        display_name = self._format_routine_display_name(routine_name)
         goal = str(routine.get("goal") or "").strip()
         steps = list(routine.get("steps") or [])
         short_version = list(routine.get("short_version") or [])
@@ -3289,11 +3290,11 @@ class NeuroGuiaOrchestratorV2:
         # caracteres literales. Así la respuesta se ve bien tanto en Streamlit
         # como en consumidores que sí admiten Markdown.
         lines: List[str] = [
-            f"Sí. Tengo guardada para {alias} la rutina {routine_name}."
+            f"Sí. Para {alias} tengo guardada la rutina «{display_name}»."
         ]
 
         if goal:
-            lines.append(f"\nObjetivo: {goal}")
+            lines.append(f"\nObjetivo: {self._polish_routine_line(goal)}")
 
         display_steps = steps or short_version
         if display_steps:
@@ -3301,14 +3302,14 @@ class NeuroGuiaOrchestratorV2:
             for index, step in enumerate(display_steps, start=1):
                 text = str(step or "").strip()
                 if text:
-                    lines.append(f"{index}. {text}")
+                    lines.append(f"{index}. {self._polish_routine_line(text)}")
 
         if adjustments:
             lines.append("\nAjustes guardados:")
             for adjustment in adjustments[:4]:
                 text = str(adjustment or "").strip()
                 if text:
-                    lines.append(f"- {text}")
+                    lines.append(f"- {self._polish_routine_line(text)}")
 
         if followup_question:
             lines.append(f"\n{followup_question}")
@@ -3316,6 +3317,30 @@ class NeuroGuiaOrchestratorV2:
             lines.append("\nSi quieres, podemos modificarla sin empezar desde cero.")
 
         return "\n".join(lines).strip()
+
+    def _format_routine_display_name(self, routine_name: str) -> str:
+        """Devuelve un nombre natural sin alterar el valor persistido."""
+
+        name = re.sub(
+            r"^rutina(?:\s+de)?\s+",
+            "",
+            str(routine_name or "").strip(),
+            flags=re.IGNORECASE,
+        ).strip()
+        if not name:
+            name = "Rutina guardada"
+        return name[:1].upper() + name[1:]
+
+    def _polish_routine_line(self, value: Any) -> str:
+        """Normaliza mayúscula inicial y puntuación solo para presentación."""
+
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not text:
+            return ""
+        text = text[:1].upper() + text[1:]
+        if text[-1] not in ".!?…:;":
+            text += "."
+        return text
 
     def _build_routine_recall_process_result(
         self,
@@ -3800,13 +3825,15 @@ class NeuroGuiaOrchestratorV2:
                     or routine.get("routine_name")
                     or "rutina guardada"
                 ).strip()
+                display_name = self._format_routine_display_name(routine_name)
                 updated_version = self._format_recalled_routine_response(
                     routine=updated_routine,
                     active_profile=active_profile,
                 )
                 response_text = (
-                    f"Listo. Actualicé la rutina {routine_name}.\n\n"
-                    f"Estrategia principal guardada: {primary_strategy}.\n\n"
+                    f"Listo. Actualicé la rutina «{display_name}».\n\n"
+                    "Estrategia principal guardada: "
+                    f"{self._polish_routine_line(primary_strategy)}\n\n"
                     f"Versión actualizada:\n{updated_version}"
                 )
                 update_result = {
@@ -3866,10 +3893,12 @@ class NeuroGuiaOrchestratorV2:
                         or routine.get("routine_name")
                         or "rutina guardada"
                     ).strip()
+                    display_name = self._format_routine_display_name(routine_name)
                     response_text = (
-                        f"Listo. Actualicé el paso {step_index + 1} de {routine_name}.\n\n"
-                        f"Antes: {previous_step}\n\n"
-                        f"Ahora: {replacement}\n\n"
+                        f"Listo. Actualicé el paso {step_index + 1} de "
+                        f"«{display_name}».\n\n"
+                        f"Antes: {self._polish_routine_line(previous_step)}\n\n"
+                        f"Ahora: {self._polish_routine_line(replacement)}\n\n"
                         "La rutina quedó guardada con este cambio."
                     )
                     update_result = {
