@@ -531,6 +531,80 @@ class RoutineMemory:
             ),
         }
 
+    def set_primary_strategy(
+        self,
+        routine_id: str,
+        family_id: str,
+        profile_id: str,
+        strategy: str,
+    ) -> Dict[str, Any]:
+        """Guarda una estrategia principal sin perder los ajustes existentes.
+
+        La estrategia se conserva en ``adjustments`` para mantener el contrato
+        actual de la tabla ``routines``. Si ya existía otra estrategia
+        principal, se reemplaza; los demás ajustes permanecen intactos. La
+        pregunta de seguimiento se limpia porque esta operación representa la
+        respuesta explícita de la persona a dicha pregunta.
+        """
+
+        routine_id = str(routine_id or "").strip()
+        family_id = str(family_id or "").strip()
+        profile_id = str(profile_id or "").strip()
+        strategy = str(strategy or "").strip().strip("\"'“”")
+
+        if not strategy:
+            return {
+                "updated": False,
+                "reason": "missing_primary_strategy",
+                "routine_id": routine_id or None,
+            }
+
+        current_row = self.db.execute(
+            """
+            SELECT *
+            FROM routines
+            WHERE routine_id = ?
+              AND family_id = ?
+              AND profile_id = ?
+            LIMIT 1
+            """,
+            (
+                routine_id,
+                family_id,
+                profile_id,
+            ),
+            fetch_one=True,
+        )
+        current = self._row_to_routine(current_row)
+
+        if not current:
+            return {
+                "updated": False,
+                "reason": "routine_not_found_in_scope",
+                "routine_id": routine_id or None,
+            }
+
+        prefix = "estrategia principal:"
+        adjustments = [
+            str(item).strip()
+            for item in list(current.get("adjustments") or [])
+            if str(item or "").strip()
+            and not str(item).strip().casefold().startswith(prefix)
+        ]
+        primary_adjustment = f"Estrategia principal: {strategy}"
+        adjustments.insert(0, primary_adjustment)
+
+        result = self.update_routine(
+            routine_id=routine_id,
+            family_id=family_id,
+            profile_id=profile_id,
+            adjustments=adjustments,
+            followup_question=None,
+        )
+        result["primary_strategy"] = strategy
+        result["primary_adjustment"] = primary_adjustment
+        return result
+
     # =========================================================
     # DESACTIVACIÓN
     # =========================================================
