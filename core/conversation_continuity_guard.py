@@ -70,6 +70,13 @@ class ConversationContinuityGuard:
         if not current_message:
             return output
 
+        # Las recuperaciones de rutinas son respuestas deterministas construidas
+        # con datos persistidos. Deben conservarse literalmente: enviarlas al
+        # redactor conversacional puede convertir una consulta en generación o
+        # modificación, especialmente cuando el mensaje contiene "no".
+        if self._is_direct_routine_recall(output):
+            return output
+
         pending = self._infer_pending_context(history=history, previous_result=previous_result)
         targets = self._resolve_routine_targets(current_message)
 
@@ -450,6 +457,36 @@ class ConversationContinuityGuard:
             return True
 
         return False
+
+    @staticmethod
+    def _is_direct_routine_recall(output: Dict[str, Any]) -> bool:
+        """Identifica una respuesta determinista de recuperación persistente."""
+
+        response_package = dict(output.get("response_package") or {})
+        response_metadata = dict(response_package.get("response_metadata") or {})
+        conversation_control = dict(output.get("conversation_control") or {})
+        conversation_frame = dict(output.get("conversation_frame") or {})
+        decision_payload = dict(output.get("decision_payload") or {})
+
+        sources = (
+            response_package.get("response_source"),
+            response_metadata.get("source"),
+            response_metadata.get("response_source"),
+            conversation_control.get("response_source"),
+        )
+        if any(source == "routine_memory_recall" for source in sources):
+            return True
+
+        return any(
+            value == "routine_recall"
+            for value in (
+                conversation_frame.get("conversation_phase"),
+                conversation_frame.get("turn_type"),
+                conversation_frame.get("turn_family"),
+                conversation_control.get("turn_type"),
+                conversation_control.get("turn_family"),
+            )
+        ) or decision_payload.get("decision_mode") == "routine_memory_recall"
 
     def _contains_real_crisis(self, message: str, output: Dict[str, Any]) -> bool:
         text = self._normalize(message)

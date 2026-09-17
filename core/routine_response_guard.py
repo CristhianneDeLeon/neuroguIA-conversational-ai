@@ -31,6 +31,14 @@ class RoutineResponseGuard:
         chat_history: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         output = dict(result or {})
+
+        # Una recuperación desde memoria persistente ya llega completamente
+        # resuelta por el orquestador. No debe volver a pasar por el constructor
+        # ni por attach_routine_to_response(), porque eso la presenta como una
+        # rutina recién generada y puede sustituir el texto de recuperación.
+        if self._is_direct_routine_recall(output):
+            return output
+
         previous_frame = dict(previous_frame or {})
         active_profile = dict(active_profile or output.get("active_profile") or {})
         extra_context = dict(extra_context or {})
@@ -157,3 +165,33 @@ class RoutineResponseGuard:
             output["conversation_frame"] = frame
 
         return output
+
+    @staticmethod
+    def _is_direct_routine_recall(output: Dict[str, Any]) -> bool:
+        """Identifica una respuesta determinista de recuperación persistente."""
+
+        response_package = dict(output.get("response_package") or {})
+        response_metadata = dict(response_package.get("response_metadata") or {})
+        conversation_control = dict(output.get("conversation_control") or {})
+        conversation_frame = dict(output.get("conversation_frame") or {})
+        decision_payload = dict(output.get("decision_payload") or {})
+
+        sources = (
+            response_package.get("response_source"),
+            response_metadata.get("source"),
+            response_metadata.get("response_source"),
+            conversation_control.get("response_source"),
+        )
+        if any(source == "routine_memory_recall" for source in sources):
+            return True
+
+        return any(
+            value == "routine_recall"
+            for value in (
+                conversation_frame.get("conversation_phase"),
+                conversation_frame.get("turn_type"),
+                conversation_frame.get("turn_family"),
+                conversation_control.get("turn_type"),
+                conversation_control.get("turn_family"),
+            )
+        ) or decision_payload.get("decision_mode") == "routine_memory_recall"
