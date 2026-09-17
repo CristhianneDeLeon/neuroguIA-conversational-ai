@@ -3089,6 +3089,70 @@ class NeuroGuiaOrchestratorV2:
                 "routine_id": None,
             }
 
+    def _synchronize_routine_response_after_store(
+        self,
+        response_package: Dict[str, Any],
+        routine_payload: Dict[str, Any],
+        routine_store_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Alinea la respuesta visible con la versión persistida.
+
+        La respuesta se construye antes de guardar la rutina. Cuando
+        ``save_routine`` actualiza una versión existente, puede conservar una
+        pregunta de seguimiento ya resuelta como ``NULL``. En ese caso se
+        elimina del texto la pregunta recién generada para no contradecir la
+        memoria persistente.
+        """
+
+        if not response_package or not routine_payload:
+            return response_package
+
+        persisted = routine_store_result.get("routine") or {}
+        if not isinstance(persisted, dict) or not persisted:
+            return response_package
+
+        incoming_followup = str(
+            routine_payload.get("followup_question") or ""
+        ).strip()
+        persisted_followup = persisted.get("followup_question")
+
+        if incoming_followup and persisted_followup is None:
+            escaped = re.escape(incoming_followup)
+            trailing_question = re.compile(
+                rf"(?:\r?\n)?\s*{escaped}\s*$",
+                flags=re.IGNORECASE,
+            )
+            for key in ("response", "text"):
+                visible_text = str(response_package.get(key) or "")
+                if visible_text:
+                    response_package[key] = trailing_question.sub(
+                        "",
+                        visible_text,
+                    ).rstrip()
+
+        activation = routine_payload.get("activation")
+        for field in (
+            "routine_id",
+            "routine_type",
+            "routine_name",
+            "goal",
+            "steps",
+            "short_version",
+            "adjustments",
+            "indicators",
+            "followup_question",
+        ):
+            if field in persisted:
+                routine_payload[field] = persisted.get(field)
+        if activation is not None:
+            routine_payload["activation"] = activation
+
+        metadata = dict(response_package.get("response_metadata", {}) or {})
+        metadata["routine_response_synchronized"] = True
+        metadata["routine_store_reason"] = routine_store_result.get("reason")
+        response_package["response_metadata"] = metadata
+        return response_package
+
 
     def _is_routine_recall_request(self, message: str) -> bool:
         """Detecta una petición explícita para recuperar una rutina ya guardada.
@@ -4977,6 +5041,12 @@ class NeuroGuiaOrchestratorV2:
             source_case_id=saved_case_id,
         )
 
+        response_package = self._synchronize_routine_response_after_store(
+            response_package=response_package,
+            routine_payload=routine_payload,
+            routine_store_result=routine_store_result,
+        )
+
         conversation_frame["routine_store_result"] = {
             "stored": bool(routine_store_result.get("stored")),
             "reason": routine_store_result.get("reason"),
@@ -5708,6 +5778,17 @@ class NeuroGuiaOrchestratorV2:
             family_id=effective_family_id,
             profile_id=effective_profile_id,
             source_case_id=saved_case_id,
+        )
+
+        response_package = self._synchronize_routine_response_after_store(
+            response_package=response_package,
+            routine_payload=routine_payload,
+            routine_store_result=routine_store_result,
+        )
+        response_text = str(
+            response_package.get("response")
+            or response_package.get("text")
+            or response_text
         )
 
         conversation_frame["routine_store_result"] = {
