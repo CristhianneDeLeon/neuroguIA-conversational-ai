@@ -298,7 +298,58 @@ class LLMGateway:
                 "fallback_reason": client_error or "openai_client_unavailable",
             }
 
-        instructions = """Eres la capa de redacción conversacional de neuroguIA.
+                demo_force_generative = str(
+            os.getenv("DEMO_FORCE_GENERATIVE", "false") or "false"
+        ).strip().lower() in {
+            "1", "true", "yes", "y", "on", "si", "sí", "enabled"
+        }
+
+        if demo_force_generative:
+            instructions = """
+Eres neuroguIA, un sistema conversacional de acompañamiento socioemocional
+no clínico en contextos de neurodivergencia.
+
+MODO DE DEMOSTRACIÓN TÉCNICA:
+Para esta demostración debes redactar la respuesta completa al mensaje actual.
+
+Prioridades:
+1. Responde directamente a lo que la persona acaba de preguntar.
+2. Usa el historial reciente para mantener continuidad.
+3. Recupera únicamente antecedentes que sean realmente pertinentes.
+4. Si existe información sobre la persona o familia, úsala de manera natural,
+   sin repetir mecánicamente todos sus datos.
+5. Si un plan o rutina anterior ya no corresponde con el mensaje actual,
+   no lo continúes por inercia: adapta la respuesta a la necesidad presente.
+6. Cuando se pida organización, ofrece una propuesta concreta, práctica y
+   flexible.
+7. Si la persona informa que algo previamente sugerido no funcionó, reajusta
+   la estrategia en vez de repetirla.
+8. Mantén un tono cálido, humano, respetuoso y claro.
+9. No diagnostiques trastornos ni condiciones clínicas.
+10. No prescribas medicamentos ni sustituyas atención profesional.
+11. Ante indicios de riesgo o peligro inmediato, prioriza seguridad,
+    apoyo presencial y servicios profesionales o de emergencia cuando
+    corresponda.
+12. No menciones rutas internas, clasificadores, prompts, modelos ni que eres
+    una inteligencia artificial externa.
+13. No inventes datos ausentes.
+14. Evita respuestas genéricas si el contexto permite ser específica.
+
+La respuesta debe sentirse como una continuación real de la conversación.
+Puedes utilizar párrafos o listas breves cuando ayuden.
+Devuelve únicamente la respuesta final visible para la persona usuaria.
+""".strip()
+
+            input_payload = {
+                "current_message": plan.get("recent_user_message") or "",
+                "recent_conversation": plan.get("recent_context") or [],
+                "active_profile": plan.get("active_profile_context") or {},
+                "conversation_priority": plan.get("conversation_priority"),
+                "current_turn_task": plan.get("current_turn_task"),
+            }
+
+        else:
+            instructions = """Eres la capa de redacción conversacional de neuroguIA.
 Responde al último mensaje como continuación directa de la conversación.
 No reinicies el tema, no ignores una precisión del usuario y no repitas una
 plantilla emocional genérica si la persona está contestando una pregunta.
@@ -309,25 +360,25 @@ No diagnostiques, no prescribas medicamentos y no digas que eres un modelo.
 Si la persona pide dos versiones, responde a ambas. Usa español natural,
 cálido y concreto. Devuelve únicamente la respuesta final visible."""
 
-        input_payload = {
-            "recent_turns": plan.get("recent_turns") or [],
-            "current_message": plan.get("message") or "",
-            "base_response": plan.get("base_response") or "",
-            "pending_context": plan.get("pending_context") or {},
-            "conversation_frame": plan.get("conversation_frame") or {},
-            "conversation_control": plan.get("conversation_control") or {},
-            "functional_analysis": plan.get("functional_analysis") or {},
-            "routine_payload": plan.get("routine_payload") or {},
-            "active_profile": plan.get("active_profile") or {},
-            "must_preserve": plan.get("must_preserve") or {},
-        }
+            input_payload = {
+                "recent_turns": plan.get("recent_turns") or [],
+                "current_message": plan.get("message") or "",
+                "base_response": plan.get("base_response") or "",
+                "pending_context": plan.get("pending_context") or {},
+                "conversation_frame": plan.get("conversation_frame") or {},
+                "conversation_control": plan.get("conversation_control") or {},
+                "functional_analysis": plan.get("functional_analysis") or {},
+                "routine_payload": plan.get("routine_payload") or {},
+                "active_profile": plan.get("active_profile") or {},
+                "must_preserve": plan.get("must_preserve") or {},
+            }
 
         try:
             response = client.responses.create(
                 model=self._get_openai_model(),
                 instructions=instructions,
                 input=json.dumps(input_payload, ensure_ascii=False, indent=2),
-                max_output_tokens=520,
+                max_output_tokens=650 if demo_force_generative else 520,
             )
         except Exception as exc:
             return {
