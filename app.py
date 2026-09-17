@@ -1195,25 +1195,38 @@ def init_session_state() -> None:
 # ---------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------
+def normalize_context_id(value: Any) -> Optional[str]:
+    """Return one stable representation for database UUID/text identifiers."""
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
 @st.cache_data(ttl=180, show_spinner=False)
 def load_units_and_profiles(db_path: str) -> Dict[str, Any]:
     pm = get_profile_manager(db_path)
     try:
         units = pm.list_units(limit=500)
-        unit_profiles: Dict[str, List[Dict[str, Any]]] = {str(unit.get("family_id")): [] for unit in units if unit.get("family_id")}
+        unit_profiles: Dict[str, List[Dict[str, Any]]] = {
+            family_id: []
+            for unit in units
+            if (family_id := normalize_context_id(unit.get("family_id")))
+        }
 
         # Carga todos los perfiles en una sola consulta cuando el gestor lo permite.
         # Si el método no existe, conserva el flujo anterior como respaldo seguro.
         if hasattr(pm, "list_all_profiles"):
             all_profiles = pm.list_all_profiles(only_active=True)
             for profile in all_profiles:
-                family_id = str(profile.get("family_id") or "")
+                family_id = normalize_context_id(profile.get("family_id"))
                 if family_id:
                     unit_profiles.setdefault(family_id, []).append(profile)
         else:
             for unit in units:
-                family_id = unit["family_id"]
-                unit_profiles[family_id] = pm.list_profiles(family_id=family_id)
+                family_id = normalize_context_id(unit.get("family_id"))
+                if family_id:
+                    unit_profiles[family_id] = pm.list_profiles(family_id=family_id)
 
         return {
             "units": units,
@@ -1376,17 +1389,23 @@ def get_context_summary_text(
         return []
 
     lines: List[str] = []
+    selected_family_id = normalize_context_id(st.session_state.selected_family_id)
+    selected_profile_id = normalize_context_id(st.session_state.selected_profile_id)
     selected_unit = next(
-        (unit for unit in units if unit.get("family_id") == st.session_state.selected_family_id),
+        (
+            unit
+            for unit in units
+            if normalize_context_id(unit.get("family_id")) == selected_family_id
+        ),
         None,
     )
     if selected_unit:
         alias = selected_unit.get("caregiver_alias") or "Caso seleccionado"
         lines.append(alias)
 
-    if st.session_state.selected_profile_id:
-        for profile in unit_profiles.get(st.session_state.selected_family_id, []):
-            if profile.get("profile_id") == st.session_state.selected_profile_id:
+    if selected_profile_id:
+        for profile in unit_profiles.get(selected_family_id or "", []):
+            if normalize_context_id(profile.get("profile_id")) == selected_profile_id:
                 lines.append(profile.get("alias") or "Perfil seleccionado")
                 break
 
@@ -2024,7 +2043,11 @@ def render_context_selector(
         key=f"case_search_{section_key}",
     )
 
-    all_unit_labels = {format_unit_label(u): u["family_id"] for u in units}
+    all_unit_labels = {
+        format_unit_label(unit): family_id
+        for unit in units
+        if (family_id := normalize_context_id(unit.get("family_id")))
+    }
     filtered_unit_labels = {
         label: fid
         for label, fid in all_unit_labels.items()
@@ -2032,9 +2055,10 @@ def render_context_selector(
     }
 
     # Si ya hay un caso seleccionado, lo mantenemos visible aunque el filtro cambie.
-    if st.session_state.selected_family_id:
+    selected_family_id = normalize_context_id(st.session_state.selected_family_id)
+    if selected_family_id:
         for label, fid in all_unit_labels.items():
-            if fid == st.session_state.selected_family_id:
+            if fid == selected_family_id:
                 filtered_unit_labels.setdefault(label, fid)
                 break
 
@@ -2042,9 +2066,9 @@ def render_context_selector(
     unit_options = ["—"] + list(unit_labels.keys())
 
     current_unit_label = "—"
-    if st.session_state.selected_family_id:
+    if selected_family_id:
         for label, fid in unit_labels.items():
-            if fid == st.session_state.selected_family_id:
+            if fid == selected_family_id:
                 current_unit_label = label
                 break
 
@@ -2056,14 +2080,17 @@ def render_context_selector(
     )
 
     if selected_unit_label != "—":
-        st.session_state.selected_family_id = unit_labels[selected_unit_label]
+        st.session_state.selected_family_id = normalize_context_id(unit_labels[selected_unit_label])
     else:
         st.session_state.selected_family_id = None
         st.session_state.selected_profile_id = None
 
     selected_profiles = []
     if st.session_state.selected_family_id:
-        selected_profiles = unit_profiles.get(st.session_state.selected_family_id, [])
+        selected_profiles = unit_profiles.get(
+            normalize_context_id(st.session_state.selected_family_id) or "",
+            [],
+        )
 
     if selected_profiles:
         profile_query = st.text_input(
@@ -2073,16 +2100,21 @@ def render_context_selector(
             key=f"profile_search_{section_key}",
         )
 
-        all_profile_labels = {format_profile_label(p): p["profile_id"] for p in selected_profiles}
+        all_profile_labels = {
+            format_profile_label(profile): profile_id
+            for profile in selected_profiles
+            if (profile_id := normalize_context_id(profile.get("profile_id")))
+        }
         filtered_profile_labels = {
             label: pid
             for label, pid in all_profile_labels.items()
             if _matches_context_search(label, profile_query)
         }
 
-        if st.session_state.selected_profile_id:
+        selected_profile_id = normalize_context_id(st.session_state.selected_profile_id)
+        if selected_profile_id:
             for label, pid in all_profile_labels.items():
-                if pid == st.session_state.selected_profile_id:
+                if pid == selected_profile_id:
                     filtered_profile_labels.setdefault(label, pid)
                     break
 
@@ -2090,9 +2122,9 @@ def render_context_selector(
         profile_options = ["—"] + list(profile_labels.keys())
 
         current_profile_label = "—"
-        if st.session_state.selected_profile_id:
+        if selected_profile_id:
             for label, pid in profile_labels.items():
-                if pid == st.session_state.selected_profile_id:
+                if pid == selected_profile_id:
                     current_profile_label = label
                     break
 
@@ -2104,7 +2136,9 @@ def render_context_selector(
         )
 
         if selected_profile_label != "—":
-            st.session_state.selected_profile_id = profile_labels[selected_profile_label]
+            st.session_state.selected_profile_id = normalize_context_id(
+                profile_labels[selected_profile_label]
+            )
         else:
             st.session_state.selected_profile_id = None
     else:
@@ -2197,7 +2231,7 @@ def create_unit_ui(db_path: str, embedded: bool = False) -> None:
                         environmental_factors=environmental_factors.strip() or None,
                         global_history=global_history.strip() or None,
                     )
-                    st.session_state.selected_family_id = family_id
+                    st.session_state.selected_family_id = normalize_context_id(family_id)
                     st.session_state.selected_profile_id = None
                     try:
                         load_units_and_profiles.clear()
@@ -2245,7 +2279,9 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
         default_unit_index = 0
         if st.session_state.get("selected_family_id"):
             for idx, label in enumerate(unit_labels):
-                if unit_options[label] == st.session_state.selected_family_id:
+                if normalize_context_id(unit_options[label]) == normalize_context_id(
+                    st.session_state.selected_family_id
+                ):
                     default_unit_index = idx
                     break
 
@@ -2390,8 +2426,10 @@ def create_profile_ui(db_path: str, available_units: List[Dict[str, Any]], embed
                         executive_profile=executive_profile.strip() or None,
                         evolution_notes=evolution_notes.strip() or None,
                     )
-                    st.session_state.selected_family_id = unit_options[unit_label]
-                    st.session_state.selected_profile_id = profile_id
+                    st.session_state.selected_family_id = normalize_context_id(
+                        unit_options[unit_label]
+                    )
+                    st.session_state.selected_profile_id = normalize_context_id(profile_id)
                     try:
                         load_units_and_profiles.clear()
                     except Exception:
@@ -2412,8 +2450,8 @@ def resolve_active_context_for_chat() -> Dict[str, Any]:
     aligned. It also protects against reruns where the selector looks active
     but the backend receives None.
     """
-    selected_family_id = st.session_state.get("selected_family_id")
-    selected_profile_id = st.session_state.get("selected_profile_id")
+    selected_family_id = normalize_context_id(st.session_state.get("selected_family_id"))
+    selected_profile_id = normalize_context_id(st.session_state.get("selected_profile_id"))
 
     active_profile: Optional[Dict[str, Any]] = None
     active_unit: Optional[Dict[str, Any]] = None
@@ -2423,8 +2461,12 @@ def resolve_active_context_for_chat() -> Dict[str, Any]:
         if selected_profile_id:
             active_profile = pm.get_profile(selected_profile_id)
             if active_profile:
-                selected_profile_id = active_profile.get("profile_id") or selected_profile_id
-                selected_family_id = selected_family_id or active_profile.get("family_id")
+                selected_profile_id = normalize_context_id(
+                    active_profile.get("profile_id") or selected_profile_id
+                )
+                selected_family_id = selected_family_id or normalize_context_id(
+                    active_profile.get("family_id")
+                )
 
         if selected_family_id:
             active_unit = pm.get_unit(selected_family_id)
@@ -2433,7 +2475,7 @@ def resolve_active_context_for_chat() -> Dict[str, Any]:
             profiles = pm.list_profiles(family_id=selected_family_id, only_active=True)
             if len(profiles) == 1:
                 active_profile = profiles[0]
-                selected_profile_id = active_profile.get("profile_id")
+                selected_profile_id = normalize_context_id(active_profile.get("profile_id"))
     finally:
         safe_close(pm)
 
