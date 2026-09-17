@@ -212,6 +212,95 @@ class RoutineMemory:
                 "routine_id": None,
             }
 
+        # Evita crear copias activas de la misma rutina. Una coincidencia
+        # exacta de familia, perfil, tipo y nombre representa la misma rutina
+        # conversacional; se actualiza conservando su identificador y fecha de
+        # creación. Las rutinas distintas continúan insertándose normalmente.
+        existing_row = self.db.execute(
+            """
+            SELECT *
+            FROM routines
+            WHERE family_id = ?
+              AND profile_id = ?
+              AND routine_type = ?
+              AND LOWER(routine_name) = LOWER(?)
+              AND is_active = ?
+            ORDER BY
+                updated_at DESC,
+                created_at DESC
+            LIMIT 1
+            """,
+            (
+                family_id,
+                profile_id,
+                routine_type,
+                routine_name,
+                self._bool_to_db(True),
+            ),
+            fetch_one=True,
+        )
+
+        existing = self._row_to_routine(
+            existing_row
+        )
+
+        if existing:
+            existing_adjustments = list(
+                existing.get("adjustments") or []
+            )
+            incoming_adjustments = list(
+                routine_payload.get("adjustments") or []
+            )
+            merged_adjustments: List[Any] = []
+            seen_adjustments = set()
+            for adjustment in existing_adjustments + incoming_adjustments:
+                text = str(adjustment or "").strip()
+                key = text.casefold()
+                if text and key not in seen_adjustments:
+                    merged_adjustments.append(adjustment)
+                    seen_adjustments.add(key)
+
+            # Una pregunta ya respondida se representa con NULL. No debe
+            # reaparecer al regenerar la misma rutina.
+            existing_followup = existing.get("followup_question")
+            followup_question = (
+                None
+                if existing_followup is None
+                else routine_payload.get("followup_question")
+            )
+
+            updates: Dict[str, Any] = {
+                "routine_type": routine_type,
+                "routine_name": routine_name,
+                "goal": routine_payload.get("goal"),
+                "steps": routine_payload.get("steps") or [],
+                "short_version": routine_payload.get("short_version") or [],
+                "adjustments": merged_adjustments,
+                "indicators": routine_payload.get("indicators") or [],
+                "followup_question": followup_question,
+                "is_active": True,
+            }
+            if source_case_id is not None:
+                updates["source_case_id"] = source_case_id
+
+            updated = self.update_routine(
+                routine_id=str(existing.get("routine_id") or ""),
+                family_id=family_id,
+                profile_id=profile_id,
+                **updates,
+            )
+            return {
+                "stored": bool(updated.get("updated")),
+                "reason": (
+                    "updated_existing"
+                    if updated.get("updated")
+                    else str(updated.get("reason") or "update_existing_failed")
+                ),
+                "routine_id": updated.get("routine_id"),
+                "routine": updated.get("routine"),
+                "created_new": False,
+            }
+
         routine_id = self._generate_id()
         now = self._now()
 
@@ -287,6 +376,7 @@ class RoutineMemory:
             "stored": True,
             "reason": "stored",
             "routine_id": routine_id,
+            "created_new": True,
             "routine": self.get_routine(
                 routine_id
             ),
