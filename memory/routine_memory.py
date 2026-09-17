@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -114,6 +116,20 @@ class RoutineMemory:
 
         return 1 if bool(value) else 0
 
+    def _normalize_identity_text(self, value: Any) -> str:
+        """Normaliza texto usado para identificar una misma rutina.
+
+        La comparación se realiza en Python para no depender de diferencias
+        entre SQLite, PostgreSQL y la vista de compatibilidad ``routines``.
+        También tolera espacios repetidos y variantes Unicode equivalentes.
+        """
+
+        text = unicodedata.normalize(
+            "NFKC",
+            str(value or ""),
+        )
+        return re.sub(r"\s+", " ", text).strip().casefold()
+
     def _row_to_routine(
         self,
         row: Optional[Dict[str, Any]],
@@ -212,37 +228,56 @@ class RoutineMemory:
                 "routine_id": None,
             }
 
-        # Evita crear copias activas de la misma rutina. Una coincidencia
-        # exacta de familia, perfil, tipo y nombre representa la misma rutina
-        # conversacional; se actualiza conservando su identificador y fecha de
-        # creación. Las rutinas distintas continúan insertándose normalmente.
-        existing_row = self.db.execute(
+        # Obtiene las rutinas activas dentro del ámbito válido y compara su
+        # identidad en Python. Esto evita falsos negativos producidos por
+        # espacios, Unicode, mayúsculas o diferencias del backend/vista SQL.
+        candidate_rows = self.db.execute(
             """
             SELECT *
             FROM routines
             WHERE family_id = ?
               AND profile_id = ?
-              AND routine_type = ?
-              AND LOWER(routine_name) = LOWER(?)
               AND is_active = ?
             ORDER BY
                 updated_at DESC,
                 created_at DESC
-            LIMIT 1
+            LIMIT 100
             """,
             (
                 family_id,
                 profile_id,
-                routine_type,
-                routine_name,
                 self._bool_to_db(True),
             ),
-            fetch_one=True,
-        )
+            fetch=True,
+        ) or []
 
-        existing = self._row_to_routine(
-            existing_row
+        normalized_name = self._normalize_identity_text(
+            routine_name
         )
+        matching_routines = []
+        for row in candidate_rows:
+            candidate = self._row_to_routine(row)
+            if (
+                candidate
+                and self._normalize_identity_text(
+                    candidate.get("routine_name")
+                ) == normalized_name
+            ):
+                matching_routines.append(candidate)
+
+        # Si ya hay duplicados históricos, usa como registro canónico el que
+        # conserva más memoria útil. No elimina ni desactiva las otras filas.
+        existing = None
+        if matching_routines:
+            existing = max(
+                matching_routines,
+                key=lambda item: (
+                    bool(item.get("adjustments")),
+                    item.get("followup_question") is None,
+                    str(item.get("updated_at") or ""),
+                    str(item.get("created_at") or ""),
+                ),
+            )
 
         if existing:
             existing_adjustments = list(
@@ -299,6 +334,7 @@ class RoutineMemory:
                 "routine_id": updated.get("routine_id"),
                 "routine": updated.get("routine"),
                 "created_new": False,
+                "matching_active_count": len(matching_routines),
             }
 
         routine_id = self._generate_id()
