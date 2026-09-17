@@ -3603,6 +3603,12 @@ class NeuroGuiaOrchestratorV2:
             "definir",
             "conserva",
             "conservar",
+            "agrega",
+            "agregar",
+            "anade",
+            "anadir",
+            "incorpora",
+            "incorporar",
         ]
 
         return bool(
@@ -3632,6 +3638,39 @@ class NeuroGuiaOrchestratorV2:
         # seguimiento. Este tipo de actualización no reemplaza los pasos:
         # se guarda como ajuste principal y conserva la rutina original.
         raw_message = " ".join(str(message or "").strip().split())
+
+        # Un ajuste adicional se conserva junto con los anteriores. Se da
+        # prioridad al contenido entre comillas para permitir instrucciones
+        # posteriores como "Conserva los demás ajustes" sin guardarlas como
+        # parte del ajuste.
+        quoted_adjustment_match = re.search(
+            r"\b(?:agrega|agregar|a[nñ]ade|a[nñ]adir|incorpora|incorporar)\s+"
+            r"(?:(?:un|el)\s+)?ajuste\s+[«“\"'](.+?)[»”\"']",
+            raw_message,
+            flags=re.IGNORECASE,
+        )
+        unquoted_adjustment_match = re.search(
+            r"\b(?:agrega|agregar|a[nñ]ade|a[nñ]adir|incorpora|incorporar)\s+"
+            r"(?:(?:un|el)\s+)?ajuste\s+(.+?)"
+            r"(?:[.!?]+\s*(?:conserva|conservar|mant[eé]n|mantener)\b|[.!?]*$)",
+            raw_message,
+            flags=re.IGNORECASE,
+        )
+        adjustment_match = quoted_adjustment_match or unquoted_adjustment_match
+        if adjustment_match:
+            adjustment = str(adjustment_match.group(1) or "").strip()
+            adjustment = adjustment.strip(" \"'“”«».,;:!?-")
+            if adjustment:
+                return {
+                    "parsed": True,
+                    "reason": "parsed_append_adjustment",
+                    "update_type": "append_adjustment",
+                    "adjustment": adjustment,
+                    "step_index": None,
+                    "step_number": None,
+                    "replacement": None,
+                }
+
         primary_patterns = [
             (
                 r"\b(?:establece|define|marca|conserva)\s+"
@@ -3879,6 +3918,74 @@ class NeuroGuiaOrchestratorV2:
                     "routine_id": routine.get("routine_id"),
                     "update_type": "primary_strategy",
                 }
+        elif parsed_update.get("update_type") == "append_adjustment":
+            adjustment = str(parsed_update.get("adjustment") or "").strip()
+            adjustments = [
+                str(item).strip()
+                for item in list(routine.get("adjustments") or [])
+                if str(item or "").strip()
+            ]
+            already_present = any(
+                item.casefold() == adjustment.casefold()
+                for item in adjustments
+            )
+
+            if already_present:
+                updated_routine = dict(routine)
+                response_text = (
+                    "Ese ajuste ya estaba guardado en la rutina. "
+                    "Conservé la versión existente sin crear duplicados."
+                )
+                update_result = {
+                    "updated": False,
+                    "reason": "adjustment_already_present",
+                    "routine_id": routine.get("routine_id"),
+                    "update_type": "append_adjustment",
+                    "adjustment": adjustment,
+                }
+            else:
+                adjustments.append(adjustment)
+                stored_update = self.routine_memory.update_routine(
+                    routine_id=str(routine.get("routine_id") or ""),
+                    family_id=str(effective_family_id or ""),
+                    profile_id=str(effective_profile_id or ""),
+                    adjustments=adjustments,
+                )
+
+                if stored_update.get("updated"):
+                    updated_routine = dict(stored_update.get("routine") or {})
+                    routine_name = str(
+                        updated_routine.get("routine_name")
+                        or routine.get("routine_name")
+                        or "rutina guardada"
+                    ).strip()
+                    display_name = self._format_routine_display_name(routine_name)
+                    response_text = (
+                        f"Listo. Agregué el ajuste a «{display_name}» sin cambiar "
+                        "los pasos ni los ajustes anteriores.\n\n"
+                        f"Nuevo ajuste: {self._polish_routine_line(adjustment)}"
+                    )
+                    update_result = {
+                        "updated": True,
+                        "reason": "adjustment_appended",
+                        "routine_id": updated_routine.get("routine_id"),
+                        "update_type": "append_adjustment",
+                        "adjustment": adjustment,
+                    }
+                else:
+                    updated_routine = dict(routine)
+                    response_text = (
+                        "No pude guardar el nuevo ajuste. No modifiqué la rutina existente."
+                    )
+                    update_result = {
+                        "updated": False,
+                        "reason": str(
+                            stored_update.get("reason")
+                            or "append_adjustment_failed"
+                        ),
+                        "routine_id": routine.get("routine_id"),
+                        "update_type": "append_adjustment",
+                    }
         else:
             step_index = int(parsed_update.get("step_index", -1))
             replacement = str(parsed_update.get("replacement") or "").strip()
@@ -3999,6 +4106,7 @@ class NeuroGuiaOrchestratorV2:
                 "step_number": update_result.get("step_number"),
                 "update_type": update_result.get("update_type"),
                 "primary_strategy": update_result.get("primary_strategy"),
+                "adjustment": update_result.get("adjustment"),
                 "active_profile_alias": (active_profile or {}).get("alias"),
             },
         }

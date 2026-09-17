@@ -32,11 +32,11 @@ class RoutineResponseGuard:
     ) -> Dict[str, Any]:
         output = dict(result or {})
 
-        # Una recuperación desde memoria persistente ya llega completamente
-        # resuelta por el orquestador. No debe volver a pasar por el constructor
-        # ni por attach_routine_to_response(), porque eso la presenta como una
-        # rutina recién generada y puede sustituir el texto de recuperación.
-        if self._is_direct_routine_recall(output):
+        # Las recuperaciones y actualizaciones persistentes ya llegan resueltas
+        # por el orquestador. No deben volver a pasar por el constructor ni por
+        # attach_routine_to_response(), porque eso las presenta como rutinas
+        # recién generadas y sustituye su texto determinista.
+        if self._is_direct_routine_operation(output):
             return output
 
         previous_frame = dict(previous_frame or {})
@@ -167,8 +167,8 @@ class RoutineResponseGuard:
         return output
 
     @staticmethod
-    def _is_direct_routine_recall(output: Dict[str, Any]) -> bool:
-        """Identifica una respuesta determinista de recuperación persistente."""
+    def _is_direct_routine_operation(output: Dict[str, Any]) -> bool:
+        """Identifica una recuperación o actualización persistente."""
 
         response_package = dict(output.get("response_package") or {})
         response_metadata = dict(response_package.get("response_metadata") or {})
@@ -182,11 +182,19 @@ class RoutineResponseGuard:
             response_metadata.get("response_source"),
             conversation_control.get("response_source"),
         )
-        if any(source == "routine_memory_recall" for source in sources):
+        protected_sources = {
+            "routine_memory_recall",
+            "routine_memory_update",
+        }
+        if any(source in protected_sources for source in sources):
             return True
 
+        protected_turns = {
+            "routine_recall",
+            "routine_update",
+        }
         return any(
-            value == "routine_recall"
+            value in protected_turns
             for value in (
                 conversation_frame.get("conversation_phase"),
                 conversation_frame.get("turn_type"),
@@ -194,4 +202,7 @@ class RoutineResponseGuard:
                 conversation_control.get("turn_type"),
                 conversation_control.get("turn_family"),
             )
-        ) or decision_payload.get("decision_mode") == "routine_memory_recall"
+        ) or decision_payload.get("decision_mode") in {
+            "routine_memory_recall",
+            "routine_memory_update",
+        }
