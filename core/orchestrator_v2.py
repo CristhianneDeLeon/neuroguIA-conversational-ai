@@ -4330,6 +4330,110 @@ class NeuroGuiaOrchestratorV2:
         effective_message = context_override.get("effective_message") or message
 
         # -----------------------------------------------------
+        # 1.0.1) IDENTIDAD DEL INTERLOCUTOR VS. PERFIL ACOMPAÑADO
+        # -----------------------------------------------------
+        # Una madre/padre/cuidador puede conversar sobre un perfil infantil.
+        # "¿Quién soy?" debe referirse a quien escribe; "¿qué perfil está activo?"
+        # se refiere a la persona acompañada. Nunca deben confundirse.
+        if self._is_speaker_identity_statement(effective_message):
+            try:
+                provisional_frame = {
+                    "speaker_role": previous_frame.get("speaker_role"),
+                    "conversation_domain": "identidad_interlocutor",
+                    "conversation_phase": "speaker_identity_store",
+                }
+                user_context_store_result = self.user_context_memory.register_turn_context(
+                    source_message=message,
+                    family_id=effective_family_id,
+                    profile_id=effective_profile_id,
+                    session_scope_id=session_scope_id,
+                    extra_context={},
+                    conversation_frame=provisional_frame,
+                    category_analysis={
+                        "detected_category": "identidad_interlocutor",
+                        "confidence": 1.0,
+                    },
+                    intent_analysis={
+                        "detected_intent": "guardar_identidad_interlocutor",
+                        "confidence": 1.0,
+                    },
+                    state_analysis={
+                        "primary_state": "supportive",
+                        "secondary_states": [],
+                    },
+                    confidence_payload={"overall_confidence": 1.0},
+                    decision_payload={"decision_mode": "speaker_identity_memory"},
+                    memory_payload={},
+                    response_memory_payload={},
+                    llm_curated_payload={},
+                    source_case_id=None,
+                )
+                user_context_payload = self.user_context_memory.build_live_context_payload(
+                    profile_id=effective_profile_id,
+                    family_id=effective_family_id,
+                    session_scope_id=session_scope_id,
+                )
+                speaker_identity = self.user_context_memory.recall_speaker_identity(
+                    profile_id=effective_profile_id,
+                    family_id=effective_family_id,
+                    session_scope_id=session_scope_id,
+                )
+            except Exception as exc:
+                user_context_store_result = {
+                    "stored": False,
+                    "reason": f"speaker_identity_store_failed:{type(exc).__name__}",
+                    "payload": None,
+                }
+                speaker_identity = {}
+            return self._build_speaker_identity_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
+                identity=speaker_identity,
+                store_acknowledgement=True,
+            )
+
+        if self._is_speaker_identity_question(effective_message):
+            try:
+                user_context_payload = self.user_context_memory.build_live_context_payload(
+                    profile_id=effective_profile_id,
+                    family_id=effective_family_id,
+                    session_scope_id=session_scope_id,
+                )
+                speaker_identity = self.user_context_memory.recall_speaker_identity(
+                    profile_id=effective_profile_id,
+                    family_id=effective_family_id,
+                    session_scope_id=session_scope_id,
+                )
+            except Exception as exc:
+                user_context_payload = self._empty_user_context_payload(
+                    session_scope_id=session_scope_id,
+                    reason=f"speaker_identity_recall_failed:{type(exc).__name__}",
+                )
+                speaker_identity = {}
+            return self._build_speaker_identity_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
+                identity=speaker_identity if speaker_identity.get("found") else {},
+                store_acknowledgement=False,
+            )
+
+        # -----------------------------------------------------
         # 1.1) IDENTIDAD CONTEXTUAL ANTES DE RUTAS DE SEGURIDAD
         # -----------------------------------------------------
         # Preguntas como "¿quién soy?" o "¿cómo me llamo?" deben responderse
@@ -7669,12 +7773,31 @@ class NeuroGuiaOrchestratorV2:
         return all(word in self.FOLLOWUP_ACCEPTANCE_WORDS for word in words)
 
     def _is_active_profile_identity_question(self, message: str) -> bool:
+        """Pregunta por la persona/perfil acompañado, no por quien escribe."""
+        normalized = self._normalize_followup_text(message)
+        if not normalized:
+            return False
+        identity_markers = [
+            "quien estoy usando",
+            "que perfil esta activo",
+            "cual perfil esta activo",
+            "que persona esta activa",
+            "con que perfil estamos trabajando",
+            "con cual perfil estamos trabajando",
+            "con quien estamos trabajando",
+            "sobre que perfil estamos trabajando",
+            "a quien estamos acompanando",
+            "a quien estamos acompañando",
+        ]
+        return any(marker in normalized for marker in identity_markers)
+
+    def _is_speaker_identity_question(self, message: str) -> bool:
+        """Pregunta por la identidad de la persona que está escribiendo."""
         normalized = self._normalize_followup_text(message)
         if not normalized:
             return False
         identity_markers = [
             "quien soy",
-            "quien estoy usando",
             "como me llamo",
             "cual es mi nombre",
             "cuales mi nombre",
@@ -7683,11 +7806,42 @@ class NeuroGuiaOrchestratorV2:
             "que nombre tengo",
             "sabes mi nombre",
             "recuerdas mi nombre",
-            "que perfil esta activo",
-            "cual perfil esta activo",
-            "que persona esta activa",
+            "que recuerdas de mi",
         ]
         return any(marker in normalized for marker in identity_markers)
+
+    def _is_speaker_identity_statement(self, message: str) -> bool:
+        """Detecta declaraciones explícitas de nombre o relación del interlocutor."""
+        normalized = self._normalize_followup_text(message)
+        if not normalized:
+            return False
+        has_name = any(
+            marker in normalized
+            for marker in ("mi nombre es ", "me llamo ")
+        )
+        has_relationship = any(
+            marker in normalized
+            for marker in (
+                "soy la mama de ",
+                "soy mama de ",
+                "soy madre de ",
+                "soy el papa de ",
+                "soy papa de ",
+                "soy padre de ",
+                "soy cuidadora de ",
+                "soy cuidador de ",
+                "soy abuela de ",
+                "soy abuelo de ",
+                "soy docente de ",
+                "soy maestra de ",
+                "soy maestro de ",
+            )
+        )
+        remember_cue = any(
+            marker in normalized
+            for marker in ("recuerda", "recordar", "ten presente", "guarda")
+        )
+        return bool(has_relationship or has_name or (remember_cue and (has_name or has_relationship)))
 
     def _is_user_context_recall_request(self, message: str) -> bool:
         normalized = self._normalize_followup_text(message)
@@ -7838,6 +7992,192 @@ class NeuroGuiaOrchestratorV2:
             "previous_frame": previous_frame,
         }
 
+
+    def _build_speaker_identity_process_result(
+        self,
+        *,
+        message: str,
+        effective_message: str,
+        active_profile: Optional[Dict[str, Any]],
+        unit_context: Dict[str, Any],
+        previous_frame: Dict[str, Any],
+        context_override: Dict[str, Any],
+        user_context_payload: Dict[str, Any],
+        user_context_store_result: Dict[str, Any],
+        conversation_curation_result: Dict[str, Any],
+        session_scope_id: Optional[str],
+        identity: Optional[Dict[str, Any]] = None,
+        store_acknowledgement: bool = False,
+    ) -> Dict[str, Any]:
+        identity = dict(identity or {})
+        speaker_name = str(identity.get("speaker_name") or "").strip()
+        relationship = str(identity.get("relationship_to_profile") or "").strip()
+        related_alias = str(identity.get("related_profile_alias") or "").strip()
+        active_alias = str((active_profile or {}).get("alias") or "").strip()
+
+        if store_acknowledgement:
+            pieces = []
+            if speaker_name:
+                pieces.append(f"tu nombre es {speaker_name}")
+            if relationship and (related_alias or active_alias):
+                pieces.append(
+                    f"eres {relationship} de {related_alias or active_alias}"
+                )
+            if pieces:
+                response_text = "Gracias. Voy a tener presente que " + " y ".join(pieces) + "."
+            else:
+                response_text = (
+                    "Gracias. Puedo tener presente tu relación con el perfil activo cuando la expreses de forma explícita."
+                )
+        elif identity:
+            if speaker_name and relationship and (related_alias or active_alias):
+                response_text = (
+                    f"Eres {speaker_name}, {relationship} de {related_alias or active_alias}. "
+                    f"Y el perfil acompañado que está activo es {active_alias or related_alias}."
+                )
+            elif speaker_name:
+                response_text = f"Me dijiste que tu nombre es {speaker_name}."
+                if active_alias:
+                    response_text += f" El perfil acompañado activo es {active_alias}."
+            elif relationship and (related_alias or active_alias):
+                response_text = (
+                    f"Me dijiste que eres {relationship} de {related_alias or active_alias}."
+                )
+            else:
+                response_text = "Tengo contexto sobre tu rol, pero no un nombre explícito guardado."
+        else:
+            response_text = (
+                "Todavía no tengo guardado tu nombre de forma explícita. "
+                "Si quieres, puedes decirme: “Mi nombre es Lucía y soy la mamá de Mateo”."
+            )
+            if active_alias:
+                response_text += f" El perfil acompañado activo es {active_alias}."
+
+        effective_family_id = (
+            (active_profile or {}).get("family_id")
+            or unit_context.get("family_id")
+        )
+        effective_profile_id = (active_profile or {}).get("profile_id")
+        source = "speaker_identity_memory"
+
+        category_analysis = {
+            "detected_category": "identidad_interlocutor",
+            "confidence": 1.0,
+            "source": source,
+        }
+        state_analysis = {
+            "primary_state": "supportive",
+            "secondary_states": [],
+            "detected_states": [],
+            "followup_needed": False,
+            "source": source,
+        }
+        intent_analysis = {
+            "detected_intent": (
+                "guardar_identidad_interlocutor"
+                if store_acknowledgement
+                else "consultar_identidad_interlocutor"
+            ),
+            "confidence": 1.0,
+            "source": source,
+        }
+        conversation_frame = {
+            "source_message": message,
+            "effective_message": effective_message,
+            "conversation_domain": "identidad_interlocutor",
+            "conversation_phase": (
+                "speaker_identity_store"
+                if store_acknowledgement
+                else "speaker_identity_recall"
+            ),
+            "turn_type": (
+                "speaker_identity_store"
+                if store_acknowledgement
+                else "speaker_identity_recall"
+            ),
+            "turn_family": (
+                "speaker_identity_store"
+                if store_acknowledgement
+                else "speaker_identity_recall"
+            ),
+            "speaker_role": identity.get("inferred_user_role"),
+            "context_override": context_override,
+            "active_profile_alias": active_alias or None,
+            "session_scope_id": session_scope_id,
+        }
+        conversation_control = {
+            "response_source": source,
+            "turn_type": conversation_frame["turn_type"],
+            "turn_family": conversation_frame["turn_family"],
+            "llm_writer_requested": False,
+            "llm_writer_used": False,
+            "llm_provider": None,
+            "llm_block_reason": "direct_identity_memory",
+            "llm_curator_status": "not_required",
+            "model_used": None,
+        }
+        response_package = {
+            "mode": "system_generated",
+            "response": response_text,
+            "text": response_text,
+            "response_source": source,
+            "response_metadata": {
+                "source": source,
+                "response_source": source,
+                "speaker_name": speaker_name or None,
+                "relationship_to_profile": relationship or None,
+                "related_profile_alias": related_alias or None,
+                "active_profile_alias": active_alias or None,
+                "identity_found": bool(identity),
+            },
+        }
+
+        return {
+            "case_id": None,
+            "stored_response_id": None,
+            "curated_llm_response_id": None,
+            "learning_payload": None,
+            "learning_store_result": None,
+            "family_id": effective_family_id,
+            "profile_id": effective_profile_id,
+            "unit_context": unit_context,
+            "active_profile": active_profile,
+            "exceptionality_analysis": self._empty_exceptionality_analysis(),
+            "support_plan": self._empty_support_plan(),
+            "conversation_control": conversation_control,
+            "conversation_frame": conversation_frame,
+            "conversational_intent": intent_analysis,
+            "expert_adaptation_plan": {},
+            "state_analysis": state_analysis,
+            "category_analysis": category_analysis,
+            "intent_analysis": intent_analysis,
+            "detected_category": "identidad_interlocutor",
+            "emotional_state": "supportive",
+            "memory_summary": {},
+            "memory_payload": {"speaker_identity": identity},
+            "user_context_payload": user_context_payload,
+            "user_context_store_result": user_context_store_result,
+            "response_memory_payload": {},
+            "stage_result": {
+                "stage": conversation_frame["conversation_phase"],
+                "conversation_phase": conversation_frame["conversation_phase"],
+                "should_close_with_followup": False,
+            },
+            "stage_hints": {},
+            "routine_payload": {},
+            "confidence_payload": {"overall_confidence": 1.0, "source": source},
+            "decision_payload": {"decision_mode": source},
+            "fallback_payload": {"use_llm": False, "fallback_reason": "direct_identity_memory"},
+            "llm_policy": {"should_use_llm": False, "reason": "direct_identity_memory"},
+            "llm_request_payload": None,
+            "llm_result": None,
+            "llm_curated_payload": None,
+            "conversation_curation_result": conversation_curation_result,
+            "session_scope_id": session_scope_id,
+            "response_package": response_package,
+            "previous_frame": previous_frame,
+        }
+
     def _build_profile_identity_process_result(
         self,
         message: str,
@@ -7864,8 +8204,8 @@ class NeuroGuiaOrchestratorV2:
             if conditions:
                 condition_part = f". También tengo presentes estas características del perfil: {', '.join(map(str, conditions[:3]))}."
             response_text = (
-                f"Sí. En este momento estoy hablando con el perfil de {alias}, {role}{age_part}. "
-                f"Voy a responder teniendo presente ese contexto, no como una conversación nueva{condition_part}"
+                f"El perfil acompañado que está activo es {alias}, {role}{age_part}. "
+                f"Voy a responder teniendo presente ese contexto sin asumir que {alias} es necesariamente quien escribe{condition_part}"
             )
             effective_family_id = active_profile.get("family_id") or unit_context.get("family_id")
             effective_profile_id = active_profile.get("profile_id")
