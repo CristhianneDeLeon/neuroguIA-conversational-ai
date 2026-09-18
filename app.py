@@ -2739,9 +2739,10 @@ def process_user_message(user_message: str) -> None:
                 "active_profile": profile_context_payload.get("active_profile", {}),
                 "active_unit": profile_context_payload.get("active_unit", {}),
                 "active_profile_identity_directive": (
-                    "Usa siempre el perfil activo para responder preguntas como 'quién soy', "
-                    "'cómo me llamo' o 'cuál es mi nombre'. No digas que no recuerdas el nombre "
-                    "si active_profile.alias está disponible."
+                    "Distingue siempre a la persona que conversa del perfil acompañado. "
+                    "Preguntas como 'quién soy', 'cómo me llamo' o 'cuál es mi nombre' se refieren "
+                    "al interlocutor y solo deben responderse con identidad explícitamente guardada. "
+                    "El perfil activo se usa cuando preguntan qué perfil/persona está siendo acompañada."
                 ),
             },
             chat_history=build_history_hint(),
