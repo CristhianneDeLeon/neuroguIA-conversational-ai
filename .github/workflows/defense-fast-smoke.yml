@@ -1,0 +1,27 @@
+name: Defense fast smoke
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile changed Python
+        run: |
+          python -m py_compile app.py
+          python -m py_compile core/orchestrator_v2.py
+          python -m py_compile core/routine_builder_v2.py
+          python -m py_compile core/conversational_repair_engine.py
+          python -m py_compile core/routine_response_guard.py
+          python -m py_compile core/conversation_continuity_guard.py
+          python -m py_compile memory/user_context_memory.py
+          python -m py_compile scripts/validate_defense_critical_regressions.py
+      - name: Critical regression smoke
+        run: python scripts/validate_defense_critical_regressions.py
