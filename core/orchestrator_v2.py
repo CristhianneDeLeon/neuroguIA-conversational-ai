@@ -3291,7 +3291,6 @@ class NeuroGuiaOrchestratorV2:
 
         alias = str((active_profile or {}).get("alias") or "este perfil").strip()
         routine_name = str(routine.get("routine_name") or "Rutina guardada").strip()
-        display_name = self._format_routine_display_name(routine_name)
         goal = str(routine.get("goal") or "").strip()
         steps = list(routine.get("steps") or [])
         short_version = list(routine.get("short_version") or [])
@@ -3302,7 +3301,7 @@ class NeuroGuiaOrchestratorV2:
         # caracteres literales. Así la respuesta se ve bien tanto en Streamlit
         # como en consumidores que sí admiten Markdown.
         lines: List[str] = [
-            f"Sí. Para {alias} tengo guardada la rutina «{display_name}»."
+            f"Sí. Para {alias} tengo guardada «{routine_name}»."
         ]
 
         if goal:
