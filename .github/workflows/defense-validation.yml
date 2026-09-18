@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - defensa-2026
+      - defensa-final-qa-2026-09-17
 
 jobs:
   validate:
@@ -42,6 +43,10 @@ jobs:
       - name: Run defense validation
         run: |
           python scripts/run_defense_checks.py
+
+      - name: Run critical defense regressions
+        run: |
+          python scripts/validate_defense_critical_regressions.py
 
       - name: Upload validation evidence
         if: always()

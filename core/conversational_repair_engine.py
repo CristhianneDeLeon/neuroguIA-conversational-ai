@@ -276,7 +276,7 @@ def resolve_conversational_repair(
             notes=["repetition_or_frustration_detected"],
         )
 
-    if _has(normalized, ["eso no me sirve", "no me sirve", "eso no funciono", "eso no funciona", "eso ya no funciono", "ya lo intente", "ya lo hice y no"]):
+    if _has(normalized, ["eso no me sirve", "no me sirve", "eso no funciono", "eso no funciona", "eso ya no funciono", "ya lo intente", "ya lo hice y no", "si eso no me funciona", "y si eso no me funciona", "si esto no me funciona", "y si esto no me funciona"]):
         if route_id == "sueno":
             response = (
                 "Tienes razon, no insistimos con lo mismo. Cambio de forma sin salirnos de sueno: "
@@ -286,6 +286,13 @@ def resolve_conversational_repair(
             response = (
                 "Tienes razon, si eso no ayudo y sigue subiendo, ahora no toca explicar mas: "
                 "mas distancia, menos palabras, objetos fuera y apoyo presencial si hay riesgo."
+            )
+        elif route_id == "bloqueo_ejecutivo":
+            response = (
+                "Si esa vía no te funciona, no repetimos la rutina completa. "
+                "Probamos una alternativa distinta: reduce la entrada a una sola acción física, "
+                "por ejemplo sentarte en el lugar de trabajo, abrir solo el material necesario "
+                "o decir en voz alta cuál es el primer verbo de la tarea."
             )
         else:
             response = "Tienes razon, no insistimos con lo mismo. Cambio de forma: bajamos la exigencia y elegimos una accion mas pequena."

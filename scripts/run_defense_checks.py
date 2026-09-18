@@ -83,6 +83,10 @@ CHECKS = [
         "conversation_continuity",
         "scripts/validate_conversation_continuity.py",
     ),
+    (
+        "defense_critical_regressions",
+        "scripts/validate_defense_critical_regressions.py",
+    ),
 ]
 
 def run_check(
@@ -210,7 +214,7 @@ def main() -> int:
             ).isoformat(),
 
         "branch_expected":
-            "defensa-2026",
+            "defensa-final-qa-2026-09-17",
 
         "modifies_versions":
             False,
