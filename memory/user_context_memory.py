@@ -924,21 +924,44 @@ class UserContextMemory:
         family_id: Optional[str] = None,
         session_scope_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Recupera la identidad explícita de quien conversa sin confundirla con el perfil."""
-        payload = self.build_live_context_payload(
-            profile_id=profile_id,
-            family_id=family_id,
-            session_scope_id=session_scope_id,
-        )
-        preferences = payload.get("conversation_preferences") or {}
-        identity = dict(preferences.get("speaker_identity") or {})
+        """Recupera la identidad explícita de quien conversa sin confundirla con el perfil.
+
+        La identidad del interlocutor pertenece primero al caso/familia. Esto permite
+        cambiar entre perfiles acompañados sin convertir a cada niño/adolescente en
+        la persona que está escribiendo.
+        """
+        candidate_scope_keys: List[str] = []
+        if family_id:
+            candidate_scope_keys.append(f"family:{family_id}")
+        if profile_id:
+            candidate_scope_keys.append(f"profile:{profile_id}")
+        if session_scope_id:
+            candidate_scope_keys.append(f"session:{session_scope_id}")
+
+        for scope_key in candidate_scope_keys:
+            row = self._fetch_scope_row(scope_key)
+            if not row:
+                continue
+            preferences = row.get("conversation_preferences") or {}
+            identity = dict(preferences.get("speaker_identity") or {})
+            if not identity:
+                continue
+            return {
+                "found": True,
+                "speaker_name": identity.get("speaker_name"),
+                "relationship_to_profile": identity.get("relationship_to_profile"),
+                "related_profile_alias": identity.get("related_profile_alias"),
+                "inferred_user_role": row.get("inferred_user_role"),
+                "scope_key": row.get("scope_key"),
+            }
+
         return {
-            "found": bool(identity),
-            "speaker_name": identity.get("speaker_name"),
-            "relationship_to_profile": identity.get("relationship_to_profile"),
-            "related_profile_alias": identity.get("related_profile_alias"),
-            "inferred_user_role": payload.get("inferred_user_role"),
-            "scope_key": payload.get("scope_key"),
+            "found": False,
+            "speaker_name": None,
+            "relationship_to_profile": None,
+            "related_profile_alias": None,
+            "inferred_user_role": None,
+            "scope_key": candidate_scope_keys[0] if candidate_scope_keys else None,
         }
 
     def register_turn_context(
