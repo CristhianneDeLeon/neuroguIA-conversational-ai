@@ -185,6 +185,9 @@ class RoutineResponseGuard:
         protected_sources = {
             "routine_memory_recall",
             "routine_memory_update",
+            "speaker_identity_memory",
+            "active_profile_identity",
+            "user_context_explicit_recall",
         }
         if any(source in protected_sources for source in sources):
             return True
@@ -192,6 +195,10 @@ class RoutineResponseGuard:
         protected_turns = {
             "routine_recall",
             "routine_update",
+            "speaker_identity_store",
+            "speaker_identity_recall",
+            "contextual_identity",
+            "explicit_recall",
         }
         return any(
             value in protected_turns
