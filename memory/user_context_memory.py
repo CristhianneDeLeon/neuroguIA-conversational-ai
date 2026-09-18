@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,7 @@ class UserContextMemory:
     MAX_SIGNALS = 8
     MAX_STRATEGIES = 6
     MAX_ROUTINES = 4
+    MAX_EXPLICIT_PREFERENCES = 8
 
     CATEGORY_TO_TOPIC = {
         "crisis_activa": "crisis",
@@ -234,9 +236,82 @@ class UserContextMemory:
 
         return {"role": "indefinido", "confidence": 0.0, "source": "insufficient_evidence"}
 
+    def _extract_explicit_preferences(self, source_message: str) -> List[str]:
+        """Extrae recuerdos funcionales pedidos de forma explícita.
+
+        Conserva la frase significativa (por ejemplo, ``Mateo prefiere...``)
+        y descarta instrucciones que solo controlan el turno actual, como
+        ``no crees una rutina`` o ``responde únicamente``.
+        """
+        source = " ".join(str(source_message or "").strip().split())
+        if not source:
+            return []
+
+        cue_patterns = [
+            r"\brecuerda\s+que\s+(.+)",
+            r"\bten\s+presente\s+que\s+(.+)",
+            r"\btoma\s+en\s+cuenta\s+que\s+(.+)",
+            r"\bguarda(?:\s+como\s+(?:dato|preferencia|contexto))?\s+que\s+(.+)",
+            r"\bpara\s+futuras\s+conversaciones[,;:]?\s*(?:recuerda\s+que\s+)?(.+)",
+        ]
+
+        candidate = ""
+        for pattern in cue_patterns:
+            match = re.search(pattern, source, flags=re.IGNORECASE)
+            if match:
+                candidate = str(match.group(1) or "").strip()
+                break
+
+        if not candidate:
+            return []
+
+        # La memoria explícita termina en la primera oración. Las siguientes
+        # suelen ser órdenes de control para la respuesta actual.
+        candidate = re.split(r"(?<=[.!?])\s+", candidate, maxsplit=1)[0].strip()
+        candidate = candidate.rstrip(" .!?;:")
+
+        normalized = self._normalize_text(candidate)
+        meaningful_markers = [
+            "prefiere",
+            "le ayuda",
+            "le funciona",
+            "funciona mejor",
+            "responde mejor",
+            "necesita",
+            "evita",
+            "se concentra mejor",
+            "se calma",
+        ]
+        if len(candidate) < 12 or not any(marker in normalized for marker in meaningful_markers):
+            return []
+
+        return [candidate]
+
     def _extract_preferences(self, source_message: str) -> Dict[str, Any]:
         msg = self._normalize_text(source_message)
         preferences: Dict[str, Any] = {}
+
+        explicit_preferences = self._extract_explicit_preferences(source_message)
+        if explicit_preferences:
+            preferences["explicit_preferences"] = explicit_preferences
+
+        # Solo las formulaciones en primera persona o con petición persistente
+        # deben convertirse en preferencias conversacionales. Esto evita que
+        # una orden local como "responde únicamente" altere la ficha estable.
+        durable_preference = any(
+            token in msg
+            for token in [
+                "prefiero",
+                "me ayuda que",
+                "me funciona mejor",
+                "quiero que siempre",
+                "para futuras conversaciones",
+                "recuerda que prefiero",
+            ]
+        )
+
+        if not durable_preference:
+            return preferences
 
         if any(token in msg for token in ["paso a paso", "poco a poco", "despacio"]):
             preferences["pace"] = "paso_a_paso"
@@ -497,14 +572,26 @@ class UserContextMemory:
             merged_role_confidence = current_role_confidence
             role_source = existing.get("role_source")
 
+        existing_preferences = dict(existing.get("conversation_preferences") or {})
+        candidate_preferences = dict(candidate.get("conversation_preferences") or {})
+        existing_explicit = list(existing_preferences.pop("explicit_preferences", []) or [])
+        candidate_explicit = list(candidate_preferences.pop("explicit_preferences", []) or [])
+        merged_preferences = {
+            **existing_preferences,
+            **candidate_preferences,
+        }
+        merged_explicit = self._dedupe(
+            candidate_explicit + existing_explicit,
+            self.MAX_EXPLICIT_PREFERENCES,
+        )
+        if merged_explicit:
+            merged_preferences["explicit_preferences"] = merged_explicit
+
         merged = {
             "inferred_user_role": merged_role,
             "role_confidence": round(merged_role_confidence, 4),
             "role_source": role_source,
-            "conversation_preferences": {
-                **(existing.get("conversation_preferences") or {}),
-                **(candidate.get("conversation_preferences") or {}),
-            },
+            "conversation_preferences": merged_preferences,
             "recurrent_topics": self._dedupe(
                 list(candidate.get("recurrent_topics", [])) + list(existing.get("recurrent_topics", [])),
                 self.MAX_TOPICS,
@@ -673,6 +760,66 @@ class UserContextMemory:
             "last_useful_phase": None,
             "summary_snapshot": {},
             "updated_at": None,
+        }
+
+    def recall_explicit_preferences(
+        self,
+        question: str,
+        profile_id: Optional[str] = None,
+        family_id: Optional[str] = None,
+        session_scope_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Recupera preferencias explícitas pertinentes sin inventar datos."""
+        payload = self.build_live_context_payload(
+            profile_id=profile_id,
+            family_id=family_id,
+            session_scope_id=session_scope_id,
+        )
+        preferences = payload.get("conversation_preferences") or {}
+        facts = list(preferences.get("explicit_preferences", []) or [])
+        if not facts:
+            return {
+                "found": False,
+                "items": [],
+                "scope_key": payload.get("scope_key"),
+            }
+
+        stopwords = {
+            "como", "cual", "cuales", "que", "quien", "donde", "cuando",
+            "prefiere", "recibir", "responde", "unicamente", "informacion",
+            "tengas", "guardada", "guardado", "para", "con", "por", "las",
+            "los", "una", "uno", "del", "sus", "esta", "este",
+        }
+        question_terms = {
+            term
+            for term in self._normalize_text(question).split()
+            if len(term) >= 3 and term not in stopwords
+        }
+
+        ranked = []
+        for index, fact in enumerate(facts):
+            fact_terms = {
+                term
+                for term in self._normalize_text(str(fact)).split()
+                if len(term) >= 3 and term not in stopwords
+            }
+            overlap = len(question_terms.intersection(fact_terms))
+            ranked.append((overlap, -index, str(fact).strip()))
+
+        ranked.sort(reverse=True)
+        best_score = ranked[0][0] if ranked else 0
+        if len(facts) > 1 and best_score <= 0:
+            return {
+                "found": False,
+                "items": [],
+                "scope_key": payload.get("scope_key"),
+            }
+
+        selected = [ranked[0][2]] if ranked else []
+        return {
+            "found": bool(selected),
+            "items": selected,
+            "scope_key": payload.get("scope_key"),
         }
 
     def register_turn_context(
