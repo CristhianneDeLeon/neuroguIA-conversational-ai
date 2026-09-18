@@ -25,3 +25,7 @@ jobs:
           python -m py_compile scripts/validate_defense_critical_regressions.py
       - name: Critical regression smoke
         run: python scripts/validate_defense_critical_regressions.py
+      - name: Audit Supabase persistence
+        run: python scripts/audit_supabase_persistence.py
+      - name: Full defense validation gate
+        run: python scripts/run_defense_checks.py
