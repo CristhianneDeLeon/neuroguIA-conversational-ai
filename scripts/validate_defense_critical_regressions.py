@@ -22,6 +22,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.orchestrator_v2 import NeuroGuiaOrchestratorV2
+from core.routine_response_guard import RoutineResponseGuard
+from core.conversation_continuity_guard import ConversationContinuityGuard
 from database.database import initialize_database
 from memory.profile_manager import ProfileManager
 
@@ -103,6 +105,27 @@ def main() -> int:
             assert "Lucía" in who_text, who_text
             assert "mamá" in who_text.lower(), who_text
             assert not who_text.startswith("Eres Mateo DEMO"), who_text
+
+            # La app aplica dos guardas finales. Ninguna debe reinterpretar
+            # una respuesta determinista de identidad como rutina o follow-up.
+            routine_guard = RoutineResponseGuard()
+            guarded_who = routine_guard.ensure(
+                message="¿Quién soy?",
+                result=who,
+                previous_frame={},
+                active_profile=who.get("active_profile") or {},
+                extra_context={},
+                chat_history=[],
+            )
+            continuity_guard = ConversationContinuityGuard()
+            guarded_who = continuity_guard.ensure(
+                message="¿Quién soy?",
+                result=guarded_who,
+                chat_history=[],
+                previous_result={},
+                active_profile=who.get("active_profile") or {},
+            )
+            assert response_text(guarded_who) == who_text, response_text(guarded_who)
 
             profile = orch.process_message(
                 message="¿Con qué perfil estamos trabajando?",
