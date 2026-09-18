@@ -3202,6 +3202,11 @@ class NeuroGuiaOrchestratorV2:
             "que rutina tienes",
             "consulta la rutina",
             "consulta mi rutina",
+            "como quedo",
+            "como esta mi rutina",
+            "version actual",
+            "version actualizada",
+            "rutina actualizada",
         ]
 
         has_routine_marker = any(marker in normalized for marker in routine_markers)
@@ -3643,15 +3648,22 @@ class NeuroGuiaOrchestratorV2:
         # prioridad al contenido entre comillas para permitir instrucciones
         # posteriores como "Conserva los demás ajustes" sin guardarlas como
         # parte del ajuste.
+        adjustment_target_clause = (
+            r"(?:(?:a|en|de)\s+(?:esta|este|la|mi)\s+(?:misma\s+)?rutina\s*[:;,\-]?\s*)?"
+        )
         quoted_adjustment_match = re.search(
             r"\b(?:agrega|agregar|a[nñ]ade|a[nñ]adir|incorpora|incorporar)\s+"
-            r"(?:(?:un|el)\s+)?ajuste\s+[«“\"'](.+?)[»”\"']",
+            r"(?:(?:un|el|otro|nuevo|este)\s+)?ajuste\s+"
+            + adjustment_target_clause
+            + r"[«“\"'](.+?)[»”\"']",
             raw_message,
             flags=re.IGNORECASE,
         )
         unquoted_adjustment_match = re.search(
             r"\b(?:agrega|agregar|a[nñ]ade|a[nñ]adir|incorpora|incorporar)\s+"
-            r"(?:(?:un|el)\s+)?ajuste\s+(.+?)"
+            r"(?:(?:un|el|otro|nuevo|este)\s+)?ajuste\s+"
+            + adjustment_target_clause
+            + r"(.+?)"
             r"(?:[.!?]+\s*(?:conserva|conservar|mant[eé]n|mantener)\b|[.!?]*$)",
             raw_message,
             flags=re.IGNORECASE,
