@@ -127,6 +127,39 @@ def main() -> int:
             )
             assert response_text(guarded_who) == who_text, response_text(guarded_who)
 
+            # Identidad nunca debe imponerse sobre una necesidad de apoyo o riesgo.
+            mixed_support = orch.process_message(
+                message="Mi nombre es Lucía y estoy muy ansiosa; no sé cómo calmarme.",
+                family_id=family_id,
+                profile_id=profile_id,
+                extra_context={"session_scope_id": "identity-session-2"},
+                chat_history=[],
+                auto_save_case=False,
+                use_llm_stub=True,
+            )
+            mixed_source = str(
+                (mixed_support.get("response_package") or {}).get("response_source")
+                or ((mixed_support.get("response_package") or {}).get("response_metadata") or {}).get("response_source")
+                or ""
+            )
+            assert mixed_source != "speaker_identity_memory", mixed_source
+
+            mixed_risk = orch.process_message(
+                message="¿Quién soy? Estoy en crisis y siento que puedo lastimarme.",
+                family_id=family_id,
+                profile_id=profile_id,
+                extra_context={"session_scope_id": "identity-session-2"},
+                chat_history=[],
+                auto_save_case=False,
+                use_llm_stub=True,
+            )
+            risk_source = str(
+                (mixed_risk.get("response_package") or {}).get("response_source")
+                or ((mixed_risk.get("response_package") or {}).get("response_metadata") or {}).get("response_source")
+                or ""
+            )
+            assert risk_source != "speaker_identity_memory", risk_source
+
             profile = orch.process_message(
                 message="¿Con qué perfil estamos trabajando?",
                 family_id=family_id,
