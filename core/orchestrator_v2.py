@@ -4348,6 +4348,48 @@ class NeuroGuiaOrchestratorV2:
                 chat_history=chat_history,
             )
 
+        # -----------------------------------------------------
+        # 1.1.1) RECUERDO EXPLÍCITO DE PREFERENCIAS DEL PERFIL
+        # -----------------------------------------------------
+        # Debe resolverse antes de la reparación conversacional y de
+        # stable_demo. De lo contrario, preguntas como "¿cómo prefiere...?"
+        # pueden convertirse erróneamente en una microrespuesta de apoyo.
+        if self._is_user_context_recall_request(effective_message):
+            try:
+                user_context_payload = self.user_context_memory.build_live_context_payload(
+                    profile_id=effective_profile_id,
+                    family_id=effective_family_id,
+                    session_scope_id=session_scope_id,
+                )
+                explicit_recall = self.user_context_memory.recall_explicit_preferences(
+                    question=effective_message,
+                    profile_id=effective_profile_id,
+                    family_id=effective_family_id,
+                    session_scope_id=session_scope_id,
+                )
+            except Exception as exc:
+                user_context_payload = self._empty_user_context_payload(
+                    session_scope_id=session_scope_id,
+                    reason=f"explicit_context_recall_failed:{type(exc).__name__}",
+                )
+                explicit_recall = {"found": False, "items": []}
+
+            return self._build_user_context_recall_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                support_plan=early_support_plan,
+                exceptionality_analysis=early_exceptionality_analysis,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
+                explicit_recall=explicit_recall,
+            )
+
 
         # -----------------------------------------------------
         # 1.2) MODIFICACIÓN CONVERSACIONAL DE RUTINA PERSISTIDA
@@ -7634,6 +7676,155 @@ class NeuroGuiaOrchestratorV2:
             "que persona esta activa",
         ]
         return any(marker in normalized for marker in identity_markers)
+
+    def _is_user_context_recall_request(self, message: str) -> bool:
+        normalized = self._normalize_followup_text(message)
+        if not normalized or "rutina" in normalized:
+            return False
+
+        question_markers = [
+            "como prefiere",
+            "que prefiere",
+            "que recuerdas de",
+            "que tienes guardado",
+            "que informacion tienes guardada",
+            "cual es la preferencia",
+            "cuales son sus preferencias",
+        ]
+        context_markers = [
+            "instruccion",
+            "instrucciones",
+            "prefiere",
+            "preferencia",
+            "le ayuda",
+            "le funciona",
+            "funciona mejor",
+            "responde mejor",
+            "necesita",
+            "evita",
+        ]
+        return bool(
+            any(marker in normalized for marker in question_markers)
+            and any(marker in normalized for marker in context_markers)
+        )
+
+    def _build_user_context_recall_process_result(
+        self,
+        message: str,
+        effective_message: str,
+        active_profile: Optional[Dict[str, Any]],
+        unit_context: Dict[str, Any],
+        previous_frame: Dict[str, Any],
+        context_override: Dict[str, Any],
+        support_plan: Dict[str, Any],
+        exceptionality_analysis: Dict[str, Any],
+        user_context_payload: Dict[str, Any],
+        user_context_store_result: Dict[str, Any],
+        conversation_curation_result: Dict[str, Any],
+        session_scope_id: Optional[str],
+        explicit_recall: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        items = [str(item).strip() for item in explicit_recall.get("items", []) if str(item).strip()]
+        alias = (active_profile or {}).get("alias") or "este perfil"
+        if items:
+            response_text = items[0].rstrip(".!") + "."
+        else:
+            response_text = (
+                f"No tengo guardada una preferencia explícita de {alias} que responda esa pregunta."
+            )
+
+        effective_family_id = (active_profile or {}).get("family_id") or unit_context.get("family_id")
+        effective_profile_id = (active_profile or {}).get("profile_id")
+        source = "user_context_explicit_recall"
+        category_analysis = {
+            "detected_category": "memoria_contextual",
+            "confidence": 1.0,
+            "source": source,
+        }
+        state_analysis = {
+            "primary_state": "supportive",
+            "secondary_states": [],
+            "detected_states": [],
+            "followup_needed": False,
+            "source": source,
+        }
+        intent_analysis = {
+            "detected_intent": "consultar_memoria_contextual",
+            "confidence": 1.0,
+            "source": source,
+        }
+        conversation_frame = {
+            "source_message": message,
+            "effective_message": effective_message,
+            "conversation_domain": "memoria_contextual",
+            "conversation_phase": "explicit_recall",
+            "context_override": context_override,
+            "active_profile_alias": (active_profile or {}).get("alias"),
+            "session_scope_id": session_scope_id,
+        }
+        conversation_control = {
+            "response_source": source,
+            "llm_writer_requested": False,
+            "llm_writer_used": False,
+            "llm_provider": None,
+            "llm_block_reason": "direct_persistent_context_recall",
+            "llm_curator_status": "not_required",
+            "model_used": None,
+        }
+        response_package = {
+            "mode": "system_generated",
+            "response": response_text,
+            "text": response_text,
+            "response_source": source,
+            "response_metadata": {
+                "source": source,
+                "response_source": source,
+                "memory_found": bool(items),
+                "active_profile_alias": (active_profile or {}).get("alias"),
+            },
+        }
+
+        return {
+            "case_id": None,
+            "stored_response_id": None,
+            "curated_llm_response_id": None,
+            "learning_payload": None,
+            "learning_store_result": None,
+            "family_id": effective_family_id,
+            "profile_id": effective_profile_id,
+            "unit_context": unit_context,
+            "active_profile": active_profile,
+            "exceptionality_analysis": exceptionality_analysis,
+            "support_plan": support_plan,
+            "conversation_control": conversation_control,
+            "conversation_frame": conversation_frame,
+            "conversational_intent": intent_analysis,
+            "expert_adaptation_plan": {},
+            "state_analysis": state_analysis,
+            "category_analysis": category_analysis,
+            "intent_analysis": intent_analysis,
+            "detected_category": "memoria_contextual",
+            "emotional_state": "supportive",
+            "memory_summary": {},
+            "memory_payload": {},
+            "user_context_payload": user_context_payload,
+            "user_context_store_result": user_context_store_result,
+            "response_memory_payload": {},
+            "stage_result": {},
+            "stage_hints": {},
+            "routine_payload": {},
+            "confidence_payload": {"overall_confidence": 1.0, "source": source},
+            "decision_payload": {"decision_mode": source},
+            "fallback_payload": {"use_llm": False, "fallback_reason": source},
+            "llm_policy": {"should_use_llm": False, "reason": source},
+            "llm_request_payload": None,
+            "llm_result": None,
+            "llm_curated_payload": None,
+            "conversation_curation_result": conversation_curation_result,
+            "session_scope_id": session_scope_id,
+            "response_package": response_package,
+            "previous_frame": previous_frame,
+        }
 
     def _build_profile_identity_process_result(
         self,
