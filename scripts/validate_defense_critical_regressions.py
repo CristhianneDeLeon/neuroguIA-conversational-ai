@@ -172,6 +172,37 @@ def main() -> int:
             profile_text = response_text(profile)
             assert "Mateo DEMO" in profile_text, profile_text
             assert "perfil" in profile_text.lower(), profile_text
+
+            summary = orch.process_message(
+                message="¿Qué recuerdas de Mateo?",
+                family_id=family_id,
+                profile_id=profile_id,
+                extra_context={"session_scope_id": "identity-session-2"},
+                chat_history=[],
+                auto_save_case=False,
+                use_llm_stub=True,
+            )
+            summary_text = response_text(summary)
+            assert "Mateo DEMO" in summary_text, summary_text
+            assert "TDAH" in summary_text, summary_text
+            assert "instrucciones claras y breves" in summary_text.lower(), summary_text
+
+            guarded_summary = routine_guard.ensure(
+                message="¿Qué recuerdas de Mateo?",
+                result=summary,
+                previous_frame={},
+                active_profile=summary.get("active_profile") or {},
+                extra_context={},
+                chat_history=[],
+            )
+            guarded_summary = continuity_guard.ensure(
+                message="¿Qué recuerdas de Mateo?",
+                result=guarded_summary,
+                chat_history=[],
+                previous_result={},
+                active_profile=summary.get("active_profile") or {},
+            )
+            assert response_text(guarded_summary) == summary_text, response_text(guarded_summary)
         finally:
             orch.close()
 
