@@ -4344,7 +4344,7 @@ class NeuroGuiaOrchestratorV2:
                 user_context_store_result = self.user_context_memory.register_turn_context(
                     source_message=message,
                     family_id=effective_family_id,
-                    profile_id=effective_profile_id,
+                    profile_id=None,
                     session_scope_id=session_scope_id,
                     extra_context={},
                     conversation_frame=provisional_frame,
