@@ -173,6 +173,19 @@ def main() -> int:
             assert "Mateo DEMO" in profile_text, profile_text
             assert "perfil" in profile_text.lower(), profile_text
 
+            remembered = orch.process_message(
+                message="¿Qué recuerdas de Mateo DEMO?",
+                family_id=family_id,
+                profile_id=profile_id,
+                extra_context={"session_scope_id": "identity-session-2"},
+                chat_history=[],
+                auto_save_case=False,
+                use_llm_stub=True,
+            )
+            remembered_text = response_text(remembered)
+            assert "Mateo DEMO" in remembered_text, remembered_text
+            assert "Lucía" not in remembered_text, remembered_text
+
             summary = orch.process_message(
                 message="¿Qué recuerdas de Mateo?",
                 family_id=family_id,
