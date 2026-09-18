@@ -4454,6 +4454,26 @@ class NeuroGuiaOrchestratorV2:
             early_support_plan = self._empty_support_plan()
 
         if (
+            self._is_active_profile_summary_question(effective_message, active_profile)
+            and not self._identity_turn_has_support_content(effective_message)
+        ):
+            return self._build_profile_summary_process_result(
+                message=message,
+                effective_message=effective_message,
+                active_profile=active_profile,
+                unit_context=unit_context,
+                previous_frame=previous_frame,
+                context_override=context_override,
+                support_plan=early_support_plan,
+                exceptionality_analysis=early_exceptionality_analysis,
+                user_context_payload=user_context_payload,
+                user_context_store_result=user_context_store_result,
+                conversation_curation_result=conversation_curation_result,
+                session_scope_id=session_scope_id,
+                chat_history=chat_history,
+            )
+
+        if (
             self._is_active_profile_identity_question(effective_message)
             and not self._identity_turn_has_support_content(effective_message)
         ):
@@ -7797,6 +7817,38 @@ class NeuroGuiaOrchestratorV2:
         ]
         return any(marker in normalized for marker in identity_markers)
 
+    def _is_active_profile_summary_question(
+        self,
+        message: str,
+        active_profile: Optional[Dict[str, Any]],
+    ) -> bool:
+        """Detecta preguntas explícitas sobre lo recordado del perfil acompañado."""
+        normalized = self._normalize_followup_text(message)
+        if not normalized or not active_profile:
+            return False
+
+        question_markers = (
+            "que recuerdas de",
+            "que recuerdas sobre",
+            "que sabes de",
+            "que tienes guardado de",
+            "que tienes guardado sobre",
+            "que informacion tienes de",
+            "que informacion tienes sobre",
+        )
+        if not any(marker in normalized for marker in question_markers):
+            return False
+
+        alias = self._normalize_followup_text(active_profile.get("alias"))
+        alias_terms = [term for term in alias.split() if len(term) >= 3]
+        references_profile = (
+            any(term in normalized.split() for term in alias_terms)
+            or "este perfil" in normalized
+            or "el perfil" in normalized
+            or "la persona activa" in normalized
+        )
+        return bool(references_profile)
+
     def _is_speaker_identity_question(self, message: str) -> bool:
         """Pregunta por la identidad de la persona que está escribiendo."""
         normalized = self._normalize_followup_text(message)
@@ -8036,6 +8088,151 @@ class NeuroGuiaOrchestratorV2:
             "previous_frame": previous_frame,
         }
 
+
+    def _build_profile_summary_process_result(
+        self,
+        *,
+        message: str,
+        effective_message: str,
+        active_profile: Optional[Dict[str, Any]],
+        unit_context: Dict[str, Any],
+        previous_frame: Dict[str, Any],
+        context_override: Dict[str, Any],
+        support_plan: Dict[str, Any],
+        exceptionality_analysis: Dict[str, Any],
+        user_context_payload: Dict[str, Any],
+        user_context_store_result: Dict[str, Any],
+        conversation_curation_result: Dict[str, Any],
+        session_scope_id: Optional[str],
+        chat_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Resume solo información realmente guardada para el perfil activo."""
+        result = self._build_profile_identity_process_result(
+            message=message,
+            effective_message=effective_message,
+            active_profile=active_profile,
+            unit_context=unit_context,
+            previous_frame=previous_frame,
+            context_override=context_override,
+            support_plan=support_plan,
+            exceptionality_analysis=exceptionality_analysis,
+            user_context_payload=user_context_payload,
+            user_context_store_result=user_context_store_result,
+            conversation_curation_result=conversation_curation_result,
+            session_scope_id=session_scope_id,
+            chat_history=chat_history,
+        )
+
+        if not active_profile:
+            return result
+
+        alias = str(active_profile.get("alias") or "este perfil").strip()
+        role = str(active_profile.get("role") or "").strip()
+        age = active_profile.get("age")
+        conditions = [str(x).strip() for x in active_profile.get("conditions", []) or [] if str(x).strip()]
+        strengths = [str(x).strip() for x in active_profile.get("strengths", []) or [] if str(x).strip()]
+        triggers = [str(x).strip() for x in active_profile.get("triggers", []) or [] if str(x).strip()]
+        helpful = [str(x).strip() for x in active_profile.get("helpful_strategies", []) or [] if str(x).strip()]
+        executive = str(active_profile.get("executive_profile") or "").strip()
+        sleep = str(active_profile.get("sleep_profile") or "").strip()
+
+        details: List[str] = []
+        identity_bits = [bit for bit in (role, f"{age} años" if age is not None else "") if bit]
+        if identity_bits:
+            details.append(", ".join(identity_bits))
+        if conditions:
+            details.append("Características reportadas: " + ", ".join(conditions[:4]))
+        if strengths:
+            details.append("Fortalezas: " + "; ".join(strengths[:3]))
+        if executive:
+            details.append("Perfil ejecutivo: " + executive)
+        if triggers:
+            details.append("Situaciones que pueden dificultarle: " + "; ".join(triggers[:3]))
+        if helpful:
+            details.append("Apoyos que suelen ayudar: " + "; ".join(helpful[:3]))
+        if sleep:
+            details.append("Sueño: " + sleep)
+
+        preferences = dict((user_context_payload or {}).get("conversation_preferences") or {})
+        explicit_preferences = [
+            str(item).strip()
+            for item in preferences.get("explicit_preferences", []) or []
+            if str(item).strip()
+        ]
+        if explicit_preferences:
+            details.append("Preferencia explícita guardada: " + explicit_preferences[0])
+
+        routine_name = ""
+        try:
+            family_id = str(active_profile.get("family_id") or unit_context.get("family_id") or "").strip()
+            profile_id = str(active_profile.get("profile_id") or "").strip()
+            if family_id and profile_id:
+                routine = self.routine_memory.get_active_routine(
+                    family_id=family_id,
+                    profile_id=profile_id,
+                )
+                routine_name = str((routine or {}).get("routine_name") or "").strip()
+        except Exception:
+            routine_name = ""
+        if routine_name:
+            details.append("Rutina activa: " + routine_name)
+
+        if details:
+            response_text = (
+                f"De {alias} tengo presente esta información guardada:\n"
+                + "\n".join(f"- {item}." for item in details)
+            )
+        else:
+            response_text = (
+                f"Tengo activo el perfil de {alias}, pero no encuentro más detalles guardados para resumir."
+            )
+
+        source = "active_profile_summary"
+        package = dict(result.get("response_package") or {})
+        metadata = dict(package.get("response_metadata") or {})
+        package.update(
+            {
+                "response": response_text,
+                "text": response_text,
+                "response_source": source,
+            }
+        )
+        metadata.update(
+            {
+                "source": source,
+                "response_source": source,
+                "detected_category": "memoria_perfil",
+                "active_profile_alias": alias,
+                "routine_name": routine_name or None,
+            }
+        )
+        package["response_metadata"] = metadata
+        result["response_package"] = package
+        result["detected_category"] = "memoria_perfil"
+        result["category_analysis"] = {
+            "detected_category": "memoria_perfil",
+            "confidence": 1.0,
+            "source": source,
+        }
+        result["intent_analysis"] = {
+            "detected_intent": "consultar_memoria_perfil",
+            "confidence": 1.0,
+            "source": source,
+        }
+        result["conversational_intent"] = dict(result["intent_analysis"])
+        result["decision_payload"] = {"decision_mode": source}
+        control = dict(result.get("conversation_control") or {})
+        control["response_source"] = source
+        control["turn_type"] = "profile_summary"
+        control["turn_family"] = "profile_summary"
+        result["conversation_control"] = control
+        frame = dict(result.get("conversation_frame") or {})
+        frame["conversation_domain"] = "memoria_perfil"
+        frame["conversation_phase"] = "profile_summary"
+        frame["turn_type"] = "profile_summary"
+        frame["turn_family"] = "profile_summary"
+        result["conversation_frame"] = frame
+        return result
 
     def _build_speaker_identity_process_result(
         self,
