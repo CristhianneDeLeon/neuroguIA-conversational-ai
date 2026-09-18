@@ -20,7 +20,7 @@ from core.conversation_stages import ConversationStages
 from core.conversational_intent import ConversationalIntentBuilder
 from core.conversational_repair_engine import resolve_conversational_repair
 from core.exceptionality_mapper import ExceptionalityMapper
-from core.support_playbooks import INTERVENTION_BANK
+from core.support_playbooks import INTERVENTION_BANK, HIGH_RISK_MARKERS
 from core.support_flow_engine import SupportFlowEngine
 from core.llm_gateway import LLMGateway
 from core.learning_engine import LearningEngine
@@ -4385,22 +4385,29 @@ class NeuroGuiaOrchestratorV2:
                     "payload": None,
                 }
                 speaker_identity = {}
-            return self._build_speaker_identity_process_result(
-                message=message,
-                effective_message=effective_message,
-                active_profile=active_profile,
-                unit_context=unit_context,
-                previous_frame=previous_frame,
-                context_override=context_override,
-                user_context_payload=user_context_payload,
-                user_context_store_result=user_context_store_result,
-                conversation_curation_result=conversation_curation_result,
-                session_scope_id=session_scope_id,
-                identity=speaker_identity,
-                store_acknowledgement=True,
-            )
+            # Si el mismo mensaje contiene ansiedad, crisis, bloqueo u otra
+            # necesidad funcional, conservamos la identidad pero dejamos que
+            # el turno continúe por las rutas de apoyo/seguridad.
+            if not self._identity_turn_has_support_content(effective_message):
+                return self._build_speaker_identity_process_result(
+                    message=message,
+                    effective_message=effective_message,
+                    active_profile=active_profile,
+                    unit_context=unit_context,
+                    previous_frame=previous_frame,
+                    context_override=context_override,
+                    user_context_payload=user_context_payload,
+                    user_context_store_result=user_context_store_result,
+                    conversation_curation_result=conversation_curation_result,
+                    session_scope_id=session_scope_id,
+                    identity=speaker_identity,
+                    store_acknowledgement=True,
+                )
 
-        if self._is_speaker_identity_question(effective_message):
+        if (
+            self._is_speaker_identity_question(effective_message)
+            and not self._identity_turn_has_support_content(effective_message)
+        ):
             try:
                 user_context_payload = self.user_context_memory.build_live_context_payload(
                     profile_id=effective_profile_id,
@@ -4446,7 +4453,10 @@ class NeuroGuiaOrchestratorV2:
             early_exceptionality_analysis = self._empty_exceptionality_analysis()
             early_support_plan = self._empty_support_plan()
 
-        if self._is_active_profile_identity_question(effective_message):
+        if (
+            self._is_active_profile_identity_question(effective_message)
+            and not self._identity_turn_has_support_content(effective_message)
+        ):
             return self._build_profile_identity_process_result(
                 message=message,
                 effective_message=effective_message,
@@ -7838,6 +7848,44 @@ class NeuroGuiaOrchestratorV2:
             for marker in ("recuerda", "recordar", "ten presente", "guarda")
         )
         return bool(has_relationship or has_name or (remember_cue and (has_name or has_relationship)))
+
+    def _identity_turn_has_support_content(self, message: str) -> bool:
+        """Evita que una consulta/declaración de identidad oculte una necesidad de apoyo."""
+        normalized = self._normalize_followup_text(message)
+        if not normalized:
+            return False
+
+        if any(self._normalize_followup_text(marker) in normalized for marker in HIGH_RISK_MARKERS):
+            return True
+
+        support_markers = (
+            "estoy en crisis",
+            "esta ocurriendo una crisis",
+            "hay riesgo",
+            "lastimarme",
+            "hacerme dano",
+            "ansiedad",
+            "ansiosa",
+            "ansioso",
+            "me angustia",
+            "me abruma",
+            "me cuesta",
+            "no puedo empezar",
+            "no logro empezar",
+            "me bloqueo",
+            "no se por donde empezar",
+            "tarea",
+            "sobrecarga",
+            "saturacion",
+            "mucho ruido",
+            "mucha luz",
+            "no puedo dormir",
+            "insomnio",
+            "estoy agotada",
+            "estoy agotado",
+            "ya no puedo",
+        )
+        return any(marker in normalized for marker in support_markers)
 
     def _is_user_context_recall_request(self, message: str) -> bool:
         normalized = self._normalize_followup_text(message)
