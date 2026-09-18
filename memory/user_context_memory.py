@@ -13,9 +13,11 @@ class UserContextMemory:
     """
     Memoria contextual selectiva para personalizacion en vivo.
 
-    Esta capa no guarda transcripciones completas ni identidad explicita.
-    Solo conserva una ficha funcional y breve que puede ayudar a dar
-    continuidad entre turnos o sesiones:
+    Esta capa no guarda transcripciones completas.
+    Conserva una ficha funcional y breve que puede ayudar a dar
+    continuidad entre turnos o sesiones. Cuando la persona lo declara
+    explícitamente, también puede conservar una identidad mínima del
+    interlocutor (nombre y relación con el perfil activo):
     - rol inferido cuando hay evidencia
     - preferencias conversacionales explicitas
     - temas y senales recurrentes
@@ -202,6 +204,20 @@ class UserContextMemory:
             "como papa",
             "como cuidador",
             "como cuidadora",
+            "soy mama",
+            "soy la mama",
+            "soy madre",
+            "soy la madre",
+            "soy papa",
+            "soy el papa",
+            "soy padre",
+            "soy el padre",
+            "soy cuidador",
+            "soy cuidadora",
+            "mama de",
+            "madre de",
+            "papa de",
+            "padre de",
         ]
         if any(token in msg for token in caregiver_tokens):
             return {"role": "cuidador", "confidence": 0.86, "source": "message_inference"}
@@ -235,6 +251,72 @@ class UserContextMemory:
             return {"role": frame_role, "confidence": 0.72, "source": "conversation_frame"}
 
         return {"role": "indefinido", "confidence": 0.0, "source": "insufficient_evidence"}
+
+
+    def _extract_speaker_identity(self, source_message: str) -> Dict[str, str]:
+        """Extrae identidad mínima declarada por quien está conversando.
+
+        Se limita a nombre y relación explícita con la persona acompañada.
+        No intenta inferir identidad a partir del perfil activo.
+        """
+        source = " ".join(str(source_message or "").strip().split())
+        if not source:
+            return {}
+
+        identity: Dict[str, str] = {}
+
+        name_patterns = [
+            r"\bmi\s+nombre\s+es\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]{0,60}?)(?=\s+(?:y|pero|adem[aá]s)\b|[,.;!?]|$)",
+            r"\bme\s+llamo\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]{0,60}?)(?=\s+(?:y|pero|adem[aá]s)\b|[,.;!?]|$)",
+        ]
+        for pattern in name_patterns:
+            match = re.search(pattern, source, flags=re.IGNORECASE)
+            if not match:
+                continue
+            name = " ".join(str(match.group(1) or "").strip().split())
+            if 1 <= len(name.split()) <= 5 and len(name) <= 64:
+                identity["speaker_name"] = name
+                break
+
+        relationship_match = re.search(
+            r"\bsoy\s+(?:(?:la|el)\s+)?"
+            r"(mam[aá]?|mam|madre|pap[aá]?|padre|cuidadora?|abuela|abuelo|docente|maestra|maestro|t[ií]a|t[ií]o)"
+            r"\s+de\s+(.+?)(?=[,.;!?]|$)",
+            source,
+            flags=re.IGNORECASE,
+        )
+        if relationship_match:
+            raw_relationship = self._normalize_text(relationship_match.group(1))
+            relationship_map = {
+                "mama": "mamá",
+                "mam": "mamá",
+                "madre": "madre",
+                "papa": "papá",
+                "padre": "padre",
+                "cuidadora": "cuidadora",
+                "cuidador": "cuidador",
+                "abuela": "abuela",
+                "abuelo": "abuelo",
+                "docente": "docente",
+                "maestra": "maestra",
+                "maestro": "maestro",
+                "tia": "tía",
+                "tio": "tío",
+            }
+            relationship = relationship_map.get(raw_relationship, raw_relationship)
+            target = " ".join(str(relationship_match.group(2) or "").strip().split())
+            target = re.sub(
+                r"\s+(?:y\s+)?(?:quiero|necesito|puedes|recuerda|ten\s+presente)\b.*$",
+                "",
+                target,
+                flags=re.IGNORECASE,
+            ).strip(" ,.;:!?")
+            if relationship:
+                identity["relationship_to_profile"] = relationship
+            if target and len(target) <= 80:
+                identity["related_profile_alias"] = target
+
+        return identity
 
     def _extract_explicit_preferences(self, source_message: str) -> List[str]:
         """Extrae recuerdos funcionales pedidos de forma explícita.
@@ -290,6 +372,10 @@ class UserContextMemory:
     def _extract_preferences(self, source_message: str) -> Dict[str, Any]:
         msg = self._normalize_text(source_message)
         preferences: Dict[str, Any] = {}
+
+        speaker_identity = self._extract_speaker_identity(source_message)
+        if speaker_identity:
+            preferences["speaker_identity"] = speaker_identity
 
         explicit_preferences = self._extract_explicit_preferences(source_message)
         if explicit_preferences:
@@ -576,10 +662,19 @@ class UserContextMemory:
         candidate_preferences = dict(candidate.get("conversation_preferences") or {})
         existing_explicit = list(existing_preferences.pop("explicit_preferences", []) or [])
         candidate_explicit = list(candidate_preferences.pop("explicit_preferences", []) or [])
+        existing_identity = dict(existing_preferences.pop("speaker_identity", {}) or {})
+        candidate_identity = dict(candidate_preferences.pop("speaker_identity", {}) or {})
         merged_preferences = {
             **existing_preferences,
             **candidate_preferences,
         }
+        merged_identity = dict(existing_identity)
+        for key, value in candidate_identity.items():
+            if str(value or "").strip():
+                merged_identity[key] = value
+        if merged_identity:
+            merged_preferences["speaker_identity"] = merged_identity
+
         merged_explicit = self._dedupe(
             candidate_explicit + existing_explicit,
             self.MAX_EXPLICIT_PREFERENCES,
@@ -819,6 +914,30 @@ class UserContextMemory:
         return {
             "found": bool(selected),
             "items": selected,
+            "scope_key": payload.get("scope_key"),
+        }
+
+
+    def recall_speaker_identity(
+        self,
+        profile_id: Optional[str] = None,
+        family_id: Optional[str] = None,
+        session_scope_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Recupera la identidad explícita de quien conversa sin confundirla con el perfil."""
+        payload = self.build_live_context_payload(
+            profile_id=profile_id,
+            family_id=family_id,
+            session_scope_id=session_scope_id,
+        )
+        preferences = payload.get("conversation_preferences") or {}
+        identity = dict(preferences.get("speaker_identity") or {})
+        return {
+            "found": bool(identity),
+            "speaker_name": identity.get("speaker_name"),
+            "relationship_to_profile": identity.get("relationship_to_profile"),
+            "related_profile_alias": identity.get("related_profile_alias"),
+            "inferred_user_role": payload.get("inferred_user_role"),
             "scope_key": payload.get("scope_key"),
         }
 
