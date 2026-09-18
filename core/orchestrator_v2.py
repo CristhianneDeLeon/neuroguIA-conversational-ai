@@ -5865,6 +5865,23 @@ class NeuroGuiaOrchestratorV2:
                 caregiver_capacity=stable_caregiver_capacity,
                 previous_frame=previous_frame,
             )
+
+        # Una reparación conversacional debe responder al problema del turno,
+        # no volver a desplegar la misma rutina que la persona acaba de rechazar.
+        repair_type = str(conversation_frame.get("repair_type") or "").strip()
+        if repair_type in {"strategy_rejection", "frustration_or_repetition"}:
+            routine_activation = {
+                "should_generate": False,
+                "reason": "suppressed_after_conversational_repair",
+                "routine_type": None,
+                "display_mode": "none",
+                "activation_score": 0.0,
+                "functional_category": functional_analysis.get("functional_category"),
+                "max_steps": 0,
+                "explicit_request": False,
+                "source": "orchestrator_repair_guard",
+            }
+
         routine_payload: Dict[str, Any] = {}
         if routine_activation.get("should_generate"):
             routine_payload = self.routine_builder.build_routine(
