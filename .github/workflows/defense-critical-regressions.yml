@@ -36,3 +36,7 @@ jobs:
         run: python scripts/validate_functional_support.py
       - name: Thesis contract
         run: python scripts/validate_thesis_contract.py
+      - name: Audit Supabase persistence
+        run: python scripts/audit_supabase_persistence.py
+      - name: Full defense validation gate
+        run: python scripts/run_defense_checks.py
