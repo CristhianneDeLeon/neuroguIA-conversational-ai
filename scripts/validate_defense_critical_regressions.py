@@ -68,6 +68,25 @@ def main() -> int:
                 executive_profile="dificultad para iniciar tareas",
                 evolution_notes=None,
             )
+            sibling_profile_id = pm.create_profile(
+                family_id=family_id,
+                alias="Sofía DEMO",
+                age=8,
+                role="hija",
+                conditions=[],
+                strengths=[],
+                triggers=[],
+                early_signs=[],
+                helpful_strategies=[],
+                harmful_strategies=[],
+                sensory_needs=[],
+                emotional_needs=[],
+                autonomy_level=None,
+                sleep_profile=None,
+                school_profile=None,
+                executive_profile=None,
+                evolution_notes=None,
+            )
         finally:
             pm.close()
 
@@ -105,6 +124,21 @@ def main() -> int:
             assert "Lucía" in who_text, who_text
             assert "mamá" in who_text.lower(), who_text
             assert not who_text.startswith("Eres Mateo DEMO"), who_text
+
+            # La identidad del interlocutor debe sobrevivir al cambio de perfil
+            # dentro del mismo caso/familia.
+            who_sibling = orch.process_message(
+                message="¿Quién soy?",
+                family_id=family_id,
+                profile_id=sibling_profile_id,
+                extra_context={"session_scope_id": "identity-session-2b"},
+                chat_history=[],
+                auto_save_case=False,
+                use_llm_stub=True,
+            )
+            who_sibling_text = response_text(who_sibling)
+            assert "Lucía" in who_sibling_text, who_sibling_text
+            assert "mamá" in who_sibling_text.lower(), who_sibling_text
 
             # La app aplica dos guardas finales. Ninguna debe reinterpretar
             # una respuesta determinista de identidad como rutina o follow-up.
