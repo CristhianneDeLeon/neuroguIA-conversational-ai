@@ -289,7 +289,8 @@ def render_routine_payload(
 
     title = str(payload.get("routine_name") or "Rutina sugerida").strip()
     goal = str(payload.get("goal") or "").strip()
-    # La UI actual escapa HTML/Markdown; usar texto plano evita mostrar ** literalmente.\n    lines: List[str] = [title]
+    # La UI actual escapa HTML/Markdown; usar texto plano evita mostrar ** literalmente.
+    lines: List[str] = [title]
     if goal and mode != "short":
         lines.append(f"Objetivo: {goal}.")
     lines.extend(f"{index}. {step[0].upper() + step[1:] if step else step}." for index, step in enumerate(steps, 1))
