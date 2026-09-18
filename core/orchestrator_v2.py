@@ -4434,12 +4434,11 @@ class NeuroGuiaOrchestratorV2:
             )
 
         # -----------------------------------------------------
-        # 1.1) IDENTIDAD CONTEXTUAL ANTES DE RUTAS DE SEGURIDAD
+        # 1.1) PERFIL ACOMPAÑADO ACTIVO
         # -----------------------------------------------------
-        # Preguntas como "¿quién soy?" o "¿cómo me llamo?" deben responderse
-        # desde el perfil activo antes de que stable_demo/crisis tome prioridad.
-        # La capa de seguridad se mantiene para mensajes de riesgo real, pero
-        # no debe pisar una consulta explícita de identidad contextual.
+        # Consultas como "¿con qué perfil estamos trabajando?" se resuelven
+        # desde el perfil activo. Las preguntas sobre la identidad de quien
+        # escribe ya se resolvieron en el bloque anterior.
         if active_profile:
             early_exceptionality_analysis = self.exceptionality_mapper.analyze_profile(active_profile)
             early_support_plan = self.exceptionality_mapper.map_profile_to_support_plan(active_profile)
@@ -4615,26 +4614,6 @@ class NeuroGuiaOrchestratorV2:
         else:
             exceptionality_analysis = self._empty_exceptionality_analysis()
             support_plan = self._empty_support_plan()
-
-        # -----------------------------------------------------
-        # 1.1) RESPUESTA DIRECTA A IDENTIDAD DEL PERFIL ACTIVO
-        # -----------------------------------------------------
-        if self._is_active_profile_identity_question(effective_message):
-            return self._build_profile_identity_process_result(
-                message=message,
-                effective_message=effective_message,
-                active_profile=active_profile,
-                unit_context=unit_context,
-                previous_frame=previous_frame,
-                context_override=context_override,
-                support_plan=support_plan,
-                exceptionality_analysis=exceptionality_analysis,
-                user_context_payload=user_context_payload,
-                user_context_store_result=user_context_store_result,
-                conversation_curation_result=conversation_curation_result,
-                session_scope_id=session_scope_id,
-                chat_history=chat_history,
-            )
 
         # -----------------------------------------------------
         # 2) ESTADO FUNCIONAL
