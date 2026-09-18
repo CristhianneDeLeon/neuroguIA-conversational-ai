@@ -3305,7 +3305,7 @@ class NeuroGuiaOrchestratorV2:
         ]
 
         if goal:
-            lines.append(f"\nObjetivo: {self._polish_routine_line(goal)}")
+            lines.append(f"\nObjetivo: {goal}")
 
         display_steps = steps or short_version
         if display_steps:
@@ -3313,14 +3313,14 @@ class NeuroGuiaOrchestratorV2:
             for index, step in enumerate(display_steps, start=1):
                 text = str(step or "").strip()
                 if text:
-                    lines.append(f"{index}. {self._polish_routine_line(text)}")
+                    lines.append(f"{index}. {text}")
 
         if adjustments:
             lines.append("\nAjustes guardados:")
             for adjustment in adjustments[:4]:
                 text = str(adjustment or "").strip()
                 if text:
-                    lines.append(f"- {self._polish_routine_line(text)}")
+                    lines.append(f"- {text}")
 
         if followup_question:
             lines.append(f"\n{followup_question}")
